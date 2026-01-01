@@ -14,6 +14,7 @@ interface
 uses
   Classes,
   SHA256, ChaCha20, Shared.Struct, Shared.FileClass, Compression.Base,
+  Compression.Brotli, Compression.Zstd, Compression.SmartSelector,
   Compiler.SetupCompiler;
 
 type

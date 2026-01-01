@@ -115,16 +115,30 @@ Source: "test.zip"; DestDir: "{app}"   ; Should use Stored
 
 ```
 Phase 4: Compiler Integration
-[████░░░░░░░░░░░░░░░░] 20%
+[████████░░░░░░░░░░░░] 40%
 
 ✅ Step 1: Enum Extension (100%)
-🔵 Step 2: Handler Integration (0%)
-⏸️ Step 3: Script Parser (0%)
+✅ Step 2: Uses Clause (100%)
+🔵 Step 3: Handler Integration (0%)
+⏸️ Step 4: Script Parser (0%)
 ```
 
 ---
 
-**Next**: Implement compressor factory in `Compiler.CompressionHandler.pas`
+## ✅ Completed Steps
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-01-01 14:20 KST
+### Step 1: Enum Extension
+- Extended `TSetupCompressMethod` in `Shared.Struct.pas`
+- Added `cmBrotli`, `cmZstd`, `cmSmart`
+
+### Step 2: Uses Clause
+- Added `Compression.Brotli` to uses
+- Added `Compression.Zstd` to uses
+- Added `Compression.SmartSelector` to uses
+
+---
+
+**Next**: Implement compressor creation logic for new methods
+
+**Document Version**: 1.1  
+**Last Updated**: 2026-01-01 14:25 KST
