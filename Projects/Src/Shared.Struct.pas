@@ -81,7 +81,8 @@ type
       64-bit builds, even without specifying packed. But to be sure we specify
       it anyway. }
   TSetupLanguageDetectionMethod = (ldUILanguage, ldLocale, ldNone);
-  TSetupCompressMethod = (cmStored, cmZip, cmBzip, cmLZMA, cmLZMA2);
+  TSetupCompressMethod = (cmStored, cmZip, cmBzip, cmLZMA, cmLZMA2, 
+    cmBrotli, cmZstd, cmSmart);
   TSetupKDFSalt = array[0..15] of Byte;
   TSetupEncryptionKey = array[0..31] of Byte;
   TSetupEncryptionNonce = record
