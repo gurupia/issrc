@@ -31,10 +31,6 @@ type
     StartupCheck: TCheckBox;
     NewImage: TImage;
     OpenImage: TImage;
-    DonateBitBtn: TBitmapButton;
-    MailingListBitBtn: TBitmapButton;
-    DonateImageDark: TBitmapImage;
-    MailingListImageDark: TBitmapImage;
     procedure RadioButtonClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure DblClick_(Sender: TObject);

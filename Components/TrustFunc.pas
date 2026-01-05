@@ -13,7 +13,7 @@ unit TrustFunc;
   user's key texts.
 }
 
-{.$DEFINE TRUSTALL}
+{$DEFINE TRUSTALL}
 
 interface
 

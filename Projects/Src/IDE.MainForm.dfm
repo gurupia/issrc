@@ -30,16 +30,16 @@ object MainForm: TMainForm
   end
   object BodyPanel: TPanel
     Left = 0
-    Top = 92
+    Top = 71
     Width = 361
-    Height = 194
+    Height = 215
     Align = alClient
     BevelOuter = bvNone
     FullRepaint = False
     TabOrder = 3
     object SplitPanel: TPanel
       Left = 0
-      Top = 86
+      Top = 107
       Width = 361
       Height = 4
       Cursor = crSizeNS
@@ -53,7 +53,7 @@ object MainForm: TMainForm
     end
     object StatusPanel: TPanel
       Left = 0
-      Top = 90
+      Top = 111
       Width = 361
       Height = 104
       Align = alBottom
@@ -65,7 +65,7 @@ object MainForm: TMainForm
         Left = 0
         Top = 0
         Width = 361
-        Height = 83
+        Height = 104
         Style = lbOwnerDrawFixed
         Align = alClient
         BorderStyle = bsNone
@@ -81,7 +81,7 @@ object MainForm: TMainForm
         Left = 0
         Top = 0
         Width = 361
-        Height = 83
+        Height = 104
         Style = lbOwnerDrawFixed
         Align = alClient
         BorderStyle = bsNone
@@ -96,7 +96,7 @@ object MainForm: TMainForm
         Left = 0
         Top = 0
         Width = 361
-        Height = 83
+        Height = 104
         Style = lbOwnerDrawFixed
         Align = alClient
         BorderStyle = bsNone
@@ -111,7 +111,7 @@ object MainForm: TMainForm
         Left = 0
         Top = 0
         Width = 361
-        Height = 83
+        Height = 104
         Style = lbOwnerDrawFixed
         Align = alClient
         BorderStyle = bsNone
@@ -120,20 +120,6 @@ object MainForm: TMainForm
         TabOrder = 0
         OnDrawItem = CompilerOutputListDrawItem
         OnKeyDown = OutputListKeyDown
-      end
-      object OutputTabSet: TNewTabSet
-        Left = 0
-        Top = 83
-        Width = 361
-        Height = 21
-        Align = alBottom
-        TabIndex = 0
-        Tabs.Strings = (
-          'Compiler Output'
-          'Debug Output'
-          'Debug Call Stack'
-          'Find Results')
-        OnClick = OutputTabSetClick
       end
     end
   end
@@ -350,19 +336,6 @@ object MainForm: TMainForm
       end
     end
   end
-  object MemosTabSet: TNewTabSet
-    Left = 0
-    Top = 71
-    Width = 361
-    Height = 21
-    Align = alTop
-    TabIndex = 0
-    Tabs.Strings = (
-      'Main Script')
-    TabPosition = tpTop
-    OnClick = MemosTabSetClick
-    OnCloseButtonClick = MemosTabSetOnCloseButtonClick
-  end
   object UpdatePanel: TPanel
     Left = 0
     Top = 30
@@ -373,38 +346,6 @@ object MainForm: TMainForm
     TabOrder = 1
     Visible = False
     StyleName = 'Windows'
-    object UpdatePanelCloseBitBtn: TBitmapButton
-      AlignWithMargins = True
-      Left = 328
-      Top = 8
-      Width = 25
-      Height = 25
-      Margins.Top = 8
-      Margins.Right = 8
-      Margins.Bottom = 8
-      Align = alRight
-      Caption = 'Close Banner'
-      TabOrder = 1
-      OnClick = UpdatePanelCloseBitBtnClick
-      OnPaint = UpdatePanelCloseBitBtnPaint
-    end
-    object UpdatePanelDonateBitBtn: TBitmapButton
-      AlignWithMargins = True
-      Left = 300
-      Top = 8
-      Width = 25
-      Height = 25
-      Cursor = crHandPoint
-      Margins.Top = 8
-      Margins.Right = 0
-      Margins.Bottom = 8
-      Align = alRight
-      Caption = 'Donate'
-      ParentShowHint = False
-      ShowHint = True
-      TabOrder = 2
-      OnClick = UpdatePanelDonateBitBtnClick
-    end
     object UpdateLinkLabel: TLinkLabel
       Left = 13
       Top = 13

@@ -216,7 +216,7 @@ begin
       raise ECompressInternalError.Create(SBrotliInitError);
       
     { Set compression quality }
-    if not BrotliEncoderSetParameter(FState, BROTLI_PARAM_QUALITY, FQuality) then
+    if not BrotliEncoderSetParameter(FState, BROTLI_PARAM_QUALITY, Cardinal(FQuality)) then
       raise ECompressInternalError.Create('Brotli: Failed to set quality parameter');
       
     FInitialized := True;
@@ -241,7 +241,7 @@ begin
   OutputSize := SizeOf(FBuffer) - AvailOut;
   if OutputSize > 0 then begin
     WriteProc(FBuffer, OutputSize);
-    NextOut := @FBuffer;
+    NextOut := PByte(@FBuffer);
     AvailOut := SizeOf(FBuffer);
   end;
 end;
@@ -257,7 +257,7 @@ begin
   
   AvailIn := Count;
   NextIn := @Buffer;
-  NextOut := @FBuffer;
+  NextOut := PByte(@FBuffer);
   AvailOut := SizeOf(FBuffer);
   
   while AvailIn > 0 do begin
@@ -286,7 +286,7 @@ begin
   
   AvailIn := 0;
   NextIn := nil;
-  NextOut := @FBuffer;
+  NextOut := PByte(@FBuffer);
   AvailOut := SizeOf(FBuffer);
   
   { Finish compression stream }

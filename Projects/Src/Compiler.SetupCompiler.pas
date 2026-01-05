@@ -321,6 +321,7 @@ uses
   PathFunc, TrustFunc, ISSigFunc, ECDSA, UnsignedFunc,
   Compiler.Messages, Shared.SetupEntFunc,
   Shared.FileClass, Shared.EncryptionFunc, Compression.Base, Compression.Zlib, Compression.bzlib,
+  Compression.Brotli, Compression.Zstd, Compiler.CompressionDLLs,
   Shared.LangOptionsSectionDirectives,
 {$IFDEF STATICPREPROC}
   ISPP.Preprocess,
@@ -2831,6 +2832,32 @@ begin
             Invalid;
           CompressMethod := cmLZMA2;
           CompressLevel := I;
+        end
+        else if Value = 'brotli' then begin
+          CompressMethod := cmBrotli;
+          CompressLevel := 6;  { Default Brotli level }
+        end
+        else if Copy(Value, 1, 7) = 'brotli/' then begin
+          I := StrToIntDef(Copy(Value, 8, Maxint), -1);
+          if (I < 0) or (I > 11) then
+            Invalid;
+          CompressMethod := cmBrotli;
+          CompressLevel := I;
+        end
+        else if Value = 'zstd' then begin
+          CompressMethod := cmZstd;
+          CompressLevel := 6;  { Default Zstd level }
+        end
+        else if Copy(Value, 1, 5) = 'zstd/' then begin
+          I := StrToIntDef(Copy(Value, 6, Maxint), -1);
+          if (I < 1) or (I > 22) then
+            Invalid;
+          CompressMethod := cmZstd;
+          CompressLevel := I;
+        end
+        else if Value = 'smart' then begin
+          CompressMethod := cmSmart;
+          CompressLevel := 0;  { Smart mode auto-selects }
         end
         else
           Invalid;
@@ -7419,6 +7446,19 @@ var
             end;
           cmLZMA2: begin
               Result := TLZMA2Compressor;
+            end;
+          cmBrotli: begin
+              LoadBrotliDLL;
+              Result := TBrotliCompressor;
+            end;
+          cmZstd: begin
+              LoadZstdDLL;
+              Result := TZstdCompressor;
+            end;
+          cmSmart: begin
+              { Smart mode: for now, use Zstd as default }
+              LoadZstdDLL;
+              Result := TZstdCompressor;
             end;
         else
           AbortCompile('GetCompressorClass: Unknown CompressMethod');

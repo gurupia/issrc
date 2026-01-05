@@ -222,7 +222,6 @@ type
     N15: TMenuItem;
     RTargetSetup: TMenuItem;
     RTargetUninstall: TMenuItem;
-    OutputTabSet: TNewTabSet;
     DebugOutputList: TListBox;
     VDebugOutput: TMenuItem;
     VHide: TMenuItem;
@@ -277,8 +276,7 @@ type
     TMsgBoxDesigner: TMenuItem;
     TRegistryDesigner: TMenuItem;
     ToolBarPanel: TPanel;
-    HMailingList: TMenuItem;
-    MemosTabSet: TNewTabSet; { First tab is the main memo, last tab is the preprocessor output memo }
+    HMailingList: TMenuItem; { First tab is the main memo, last tab is the preprocessor output memo }
     FSaveAll: TMenuItem;
     RStepOut: TMenuItem;
     VNextTab: TMenuItem;
@@ -323,8 +321,6 @@ type
     EFindRegEx: TMenuItem;
     UpdatePanel: TPanel;
     UpdateLinkLabel: TLinkLabel;
-    UpdatePanelCloseBitBtn: TBitmapButton;
-    UpdatePanelDonateBitBtn: TBitmapButton;
     EGotoFile: TMenuItem;
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure FExitClick(Sender: TObject);
