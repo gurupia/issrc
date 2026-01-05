@@ -16,8 +16,9 @@ Gurupia Inno Studio has been successfully transformed from a basic .NET port int
 - **Tooltips & UX**: Complete Korean localization for tooltips and localized action icons.
 
 ### 3. Advanced Compression (Zstd/Brotli)
-- **Direct Integration**: Toolbar ComboBox for choosing compression methods.
-- **Two-Way Sync**: ComboBox updates the `Compression=` directive in the script, and script changes reflect in the UI.
+- **Direct Integration**: Toolbar ComboBox in the .NET IDE for choosing compression methods.
+- **Two-Way Sync**: UI selections instantly update the `Compression=` directive in the script.
+- **Command-line Overrides**: `/C<method>` flag for `ISCC.exe` to override settings in CI/CD (e.g., `/Czstd`).
 - **Custom Compiler Pathing**: Built-in support for the custom-built `ISCC.exe` with Zstd libraries.
 
 ### 4. Technical Excellence

@@ -67,7 +67,7 @@ var
   StdOutHandle, StdErrHandle: THandle;
   StdOutHandleIsConsole, StdErrHandleIsConsole: Boolean;
   ScriptFilename: String;
-  Definitions, IncludePath, IncludeFiles, Output, OutputPath, OutputFilename: String;
+  Definitions, IncludePath, IncludeFiles, Output, OutputPath, OutputFilename, Compression: String;
   SignTools: TStringList;
   ScriptLines, NextScriptLine: PScriptLine;
   CurLine: String;
@@ -402,6 +402,7 @@ procedure ProcessCommandLine;
     WriteStdErr('  /O(+|-)            Enable or disable output (overrides Output)');
     WriteStdErr('  /O<path>           Output files to specified path (overrides OutputDir)');
     WriteStdErr('  /F<filename>       Specifies an output filename (overrides OutputBaseFilename)');
+    WriteStdErr('  /C<method>         Overrides the Compression setting (e.g. /Czstd)');
     WriteStdErr('  /S<name>=<command> Sets a SignTool with the specified name and command');
     WriteStdErr('                     (Any Sign Tools configured using the Compiler IDE will be specified automatically)');
     WriteStdErr('  /Q                 Quiet compile (print error messages only)');
@@ -451,6 +452,8 @@ begin
       end
       else if GetParam(S, 'F') then
         OutputFilename := S
+      else if GetParam(S, 'C') then
+        Compression := S
       else if GetParam(S, 'S') then begin
         if Pos('=', S) = 0 then begin
           ShowBanner;
@@ -616,6 +619,8 @@ begin
       AppendOption(Options, 'OutputDir', OutputPath);
     if OutputFilename <> '' then
       AppendOption(Options, 'OutputBaseFilename', OutputFilename);
+    if Compression <> '' then
+      AppendOption(Options, 'Compression', Compression);
 
     for I := 0 to SignTools.Count-1 do
       Options := Options + AddSignToolParam(SignTools[I]);

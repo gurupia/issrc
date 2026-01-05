@@ -312,6 +312,7 @@ type
     procedure SetOutput(Value: Boolean);
     procedure SetOutputBaseFilename(const Value: String);
     procedure SetOutputDir(const Value: String);
+    procedure SetCompressionMethod(const Value: String);
   end;
 
 implementation
@@ -2396,6 +2397,29 @@ procedure TSetupCompiler.SetOutputDir(const Value: String);
 begin
   OutputDir := Value;
   FixedOutputDir := True;
+end;
+
+procedure TSetupCompiler.SetCompressionMethod(const Value: String);
+begin
+  { Parse compression method from command line option }
+  if CompareText(Value, 'lzma2') = 0 then
+    CompressMethod := cmLZMA2
+  else if CompareText(Value, 'lzma') = 0 then
+    CompressMethod := cmLZMA
+  else if CompareText(Value, 'zip') = 0 then
+    CompressMethod := cmZip
+  else if CompareText(Value, 'bzip') = 0 then
+    CompressMethod := cmBzip
+  else if CompareText(Value, 'brotli') = 0 then
+    CompressMethod := cmBrotli
+  else if CompareText(Value, 'zstd') = 0 then
+    CompressMethod := cmZstd
+  else if CompareText(Value, 'smart') = 0 then
+    CompressMethod := cmSmart
+  else if CompareText(Value, 'none') = 0 then
+    CompressMethod := cmStored
+  else
+    AbortCompileParamError('Invalid compression method: ' + Value, 'Compression');
 end;
 
 procedure TSetupCompiler.EnumSetupProc(const Line: PChar; const Ext: Integer);
