@@ -1,0 +1,8 @@
+format issig-v2
+file-name "isunzlib-x64.dll"
+file-size 27792
+file-hash 43c58550b9e6d772a72ad74df84619bd9a03f72ce54bddaafb08ea175f482f44
+file-tag ""
+key-id def0147c3bbc17ab99bf7b7a9c2de1390283f38972152418d7c2a4a7d7131a38
+sig-r 8fd4783c7d5f1052ea035d02918650c3d692b91312fccff5178faa036a3c5673
+sig-s 5e4cdae284b23c8da5e70bf4490945a1f4c06318f32d05778d1c7690deadb85a

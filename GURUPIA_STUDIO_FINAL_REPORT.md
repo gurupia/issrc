@@ -26,6 +26,7 @@ Gurupia Inno Studio has been successfully transformed from a basic .NET port int
 - **Two-Way Property Sync**: Real-time updates from the PropertyGrid back to the Scintilla editor using absolute line tracking.
 
 ## 📂 Project Structure
+- `GurupiaStudio_v1.0/`: **Portable Release Package** (IDE + Compiler + Zstd).
 - `InnoSetupIDE-DotNet/`: Core .NET WinForms source.
 - `Components/`: Custom Pascal components for Zstd/Brotli support.
 - `issrc/`: Inno Setup base source with custom modifications.
@@ -33,6 +34,7 @@ Gurupia Inno Studio has been successfully transformed from a basic .NET port int
 ## 🏁 Final Status
 - **Build Status**: ✅ PASS (0 errors, 0 warnings)
 - **Features**: ✅ 100% COMPLETE
+- **Binaries**: ✅ SHIPPED (See `GurupiaStudio_v1.0/` folder)
 - **Documentation**: ✅ UPDATED
 
 ---
