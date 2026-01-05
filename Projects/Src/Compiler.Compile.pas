@@ -152,6 +152,9 @@ begin
             Result := isceInvalidParam;
             Exit;
           end;
+        end else if StrLIComp(P, 'Compression=', Length('Compression=')) = 0 then begin
+          Inc(P, Length('Compression='));
+          SetupCompiler.SetCompressionMethod(P);
         end else if StrLIComp(P, 'ISPP:', Length('ISPP:')) = 0 then
           SetupCompiler.AddPreprocOption(P)
         else begin
