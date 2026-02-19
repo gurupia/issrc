@@ -322,7 +322,7 @@ uses
   PathFunc, TrustFunc, ISSigFunc, ECDSA, UnsignedFunc,
   Compiler.Messages, Shared.SetupEntFunc,
   Shared.FileClass, Shared.EncryptionFunc, Compression.Base, Compression.Zlib, Compression.bzlib,
-  Compression.Brotli, Compression.Zstd, Compiler.CompressionDLLs,
+  Compression.Brotli, Compression.Zstd, Compiler.CompressionDLLs, Compiler.CompressionFactory,
   Shared.LangOptionsSectionDirectives,
 {$IFDEF STATICPREPROC}
   ISPP.Preprocess,
@@ -392,8 +392,10 @@ end;
 { TISSigKeyEntryExtraInfo }
 
 function TISSigKeyEntryExtraInfo.HasGroupName(const GroupName: String): Boolean;
+var
+  I: Integer;
 begin
-  for var I := 0 to Length(GroupNames)-1 do
+  for I := 0 to Length(GroupNames)-1 do
     if SameText(GroupNames[I], GroupName) then
       Exit(True);
   Result := False;
@@ -451,6 +453,8 @@ begin
 end;
 
 destructor TSetupCompiler.Destroy;
+var
+  I: Integer;
 begin
   CodeCompiler.Free;
   CodeText.Free;
@@ -459,7 +463,7 @@ begin
   SignToolsParams.Free;
   SignTools.Free;
   if Assigned(SignToolList) then begin
-    for var I := 0 to SignToolList.Count-1 do
+    for I := 0 to SignToolList.Count-1 do
       TSignTool(SignToolList[I]).Free;
     SignToolList.Free;
   end;
@@ -552,14 +556,18 @@ begin
 end;
 
 function TSetupCompiler.CreateWizardImagesFromResources(const AResourceNamesPrefixes, AResourceNamesPostfixes: array of String; const ADark: Boolean): TWizardImages;
+var
+  ADarkPostfix: String;
+  I, J: Integer;
 begin
-  var ADarkPostfix := '';
   if ADark then
-   ADarkPostfix := '_Dark';
+   ADarkPostfix := '_Dark'
+  else
+   ADarkPostfix := '';
   Result := TWizardImages.Create;
   try
-    for var I := 0 to Length(AResourceNamesPrefixes)-1 do
-      for var J := 0 to Length(AResourceNamesPostfixes)-1 do
+    for I := 0 to Length(AResourceNamesPrefixes)-1 do
+      for J := 0 to Length(AResourceNamesPostfixes)-1 do
         Result.Add(TResourceStream.Create(HInstance, AResourceNamesPrefixes[I]+AResourceNamesPostfixes[J]+ADarkPostfix, RT_RCDATA));
   except
     Result.Free;
@@ -580,54 +588,70 @@ begin
 end;
 
 procedure TSetupCompiler.InitPreprocessor;
+{$IFNDEF STATICPREPROC}
+var
+  Filename: String;
+  M: HMODULE;
 begin
   if PreprocessorInitialized then
     Exit;
-{$IFNDEF STATICPREPROC}
-  var Filename := CompilerDir + 'ISPP.dll';
+  Filename := CompilerDir + 'ISPP.dll';
   if NewFileExists(Filename) then begin
-    var M := LoadCompilerDLL(Filename, [ltloTrustAllOnDebug]);
+    M := LoadCompilerDLL(Filename, [ltloTrustAllOnDebug]);
     PreprocessScriptProc := GetProcAddress(M, 'ISPreprocessScriptW');
     if not Assigned(PreprocessScriptProc) then
       AbortCompile('Failed to get address of functions in ISPP.dll');
   end; { else ISPP unavailable; fall back to built-in preprocessor }
 {$ELSE}
+begin
+  if PreprocessorInitialized then
+    Exit;
   PreprocessScriptProc := ISPreprocessScript;
 {$ENDIF}
   PreprocessorInitialized := True;
 end;
 
 procedure TSetupCompiler.InitZipDLL;
+var
+  DllName: String;
+  Filename: String;
+  M: HMODULE;
 begin
   if ZipInitialized then
     Exit;
-  const DllName = {$IFDEF WIN64} 'iszlib-x64.dll' {$ELSE} 'iszlib.dll' {$ENDIF};
-  const Filename = CompilerDir + DllName;
-  const M = LoadCompilerDLL(Filename, [ltloTrustAllOnDebug]);
+  DllName := {$IFDEF WIN64} 'iszlib-x64.dll' {$ELSE} 'iszlib.dll' {$ENDIF};
+  Filename := CompilerDir + DllName;
+  M := LoadCompilerDLL(Filename, [ltloTrustAllOnDebug]);
   if not ZlibInitCompressFunctions(M) then
     AbortCompile('Failed to get address of functions in ' + DllName);
   ZipInitialized := True;
 end;
 
 procedure TSetupCompiler.InitBzipDLL;
+var
+  DllName, Filename: String;
+  M: HMODULE;
 begin
   if BzipInitialized then
     Exit;
-  const DllName = {$IFDEF WIN64} 'isbzip-x64.dll' {$ELSE} 'isbzip.dll' {$ENDIF};
-  const Filename = CompilerDir + DllName;
-  const M = LoadCompilerDLL(Filename, [ltloTrustAllOnDebug]);
+  DllName := {$IFDEF WIN64} 'isbzip-x64.dll' {$ELSE} 'isbzip.dll' {$ENDIF};
+  Filename := CompilerDir + DllName;
+  M := LoadCompilerDLL(Filename, [ltloTrustAllOnDebug]);
   if not BZInitCompressFunctions(M) then
     AbortCompile('Failed to get address of functions in ' + DllName);
   BzipInitialized := True;
 end;
 
 procedure TSetupCompiler.InitLZMADLL;
+var
+  DllName, Filename: String;
+  M: HMODULE;
 begin
   if LZMAInitialized then
     Exit;
-  const DllName = {$IFDEF WIN64} 'islzma-x64.dll' {$ELSE} 'islzma.dll' {$ENDIF};
-  const Filename = CompilerDir + DllName;
-  const M = LoadCompilerDLL(Filename, [ltloTrustAllOnDebug]);
+  DllName := {$IFDEF WIN64} 'islzma-x64.dll' {$ELSE} 'islzma.dll' {$ENDIF};
+  Filename := CompilerDir + DllName;
+  M := LoadCompilerDLL(Filename, [ltloTrustAllOnDebug]);
   if not LZMAInitCompressFunctions(M) then
     AbortCompile('Failed to get address of functions in ' + DllName);
   LZMAInitialized := True;
@@ -1193,14 +1217,15 @@ var
     UseCache: Boolean;
     Lines: TScriptFileLines;
     SaveLineFilename, L: String;
-    SaveLineNumber, I: Integer;
+    SaveLineNumber, I, LineIndex: Integer;
     Line: PScriptFileLine;
+    AnsiConvertCodePage: Word;
   begin
     if Filename <> '' then
       Filename := PathExpand(PrependSourceDirName(Filename));
 
     UseCache := not (LangSection and LangSectionPre);
-    var AnsiConvertCodePage: Word := 0;
+    AnsiConvertCodePage := 0;
     if LangSection then begin
       { During a Pre pass on an .isl file, use code page 1252 for translation.
         Previously, the system code page was used, but on DBCS that resulted in
@@ -1222,7 +1247,7 @@ var
       SaveLineFilename := LineFilename;
       SaveLineNumber := LineNumber;
 
-      for var LineIndex := 0 to Lines.Count-1 do begin
+      for LineIndex := 0 to Lines.Count-1 do begin
         Line := Lines[LineIndex];
         LineFilename := Line.LineFilename;
         LineNumber := Line.LineNumber;
@@ -1283,8 +1308,10 @@ procedure TSetupCompiler.ExtractParameters(S: PChar;
   const ParamInfo: array of TParamInfo; var ParamValues: array of TParamValue);
 
   function GetParamIndex(const AName: String): Integer;
+  var
+    I: Integer;
   begin
-    for var I := 0 to High(ParamInfo) do
+    for I := 0 to High(ParamInfo) do
       if CompareText(ParamInfo[I].Name, AName) = 0 then begin
         Result := Integer(I);
         if ParamValues[I].Found then
@@ -1300,8 +1327,9 @@ procedure TSetupCompiler.ExtractParameters(S: PChar;
 var
   ParamIndex: Integer;
   ParamName, Data: String;
+  I: Integer;
 begin
-  for var I := 0 to High(ParamValues) do begin
+  for I := 0 to High(ParamValues) do begin
     ParamValues[I].Found := False;
     ParamValues[I].Data := '';
   end;
@@ -1358,7 +1386,7 @@ begin
   end;
 
   { Check for missing required parameters }
-  for var I := 0 to High(ParamInfo) do begin
+  for I := 0 to High(ParamInfo) do begin
     if (piRequired in ParamInfo[I].Flags) and
        not ParamValues[I].Found then
       AbortCompileParamError(SCompilerParamNotSpecified, ParamInfo[I].Name);
@@ -1824,6 +1852,22 @@ function TSetupCompiler.EvalCheckOrInstallIdentifier(Sender: TSimpleExpression;
 var
   IsCheck: Boolean;
   Decl: String;
+  procedure BuildDeclString;
+  var
+    I: Integer;
+  begin
+    for I := Low(Parameters) to High(Parameters) do begin
+      if Parameters[I].VType = vtUnicodeString then
+        Decl := Decl + ' @String'
+      else if Parameters[I].VType = vtInteger then
+        Decl := Decl + ' @LongInt'
+      else if Parameters[I].VType = vtBoolean then
+        Decl := Decl + ' @Boolean'
+      else
+        raise Exception.Create('Internal Error: unknown parameter type');
+    end;
+  end;
+
 begin
   IsCheck := Boolean(Sender.Tag);
 
@@ -1832,16 +1876,7 @@ begin
   else
     Decl := '0';
 
-  for var I := Low(Parameters) to High(Parameters) do begin
-    if Parameters[I].VType = vtUnicodeString then
-      Decl := Decl + ' @String'
-    else if Parameters[I].VType = vtInteger then
-      Decl := Decl + ' @LongInt'
-    else if Parameters[I].VType = vtBoolean then
-      Decl := Decl + ' @Boolean'
-    else
-      raise Exception.Create('Internal Error: unknown parameter type');
-  end;
+  BuildDeclString;
 
   CodeCompiler.AddExport(Name, Decl, False, True, LineFileName, LineNumber);
 
@@ -1888,6 +1923,7 @@ end;
 function ExtractFlag(var S: String; const FlagStrs: array of PChar): Integer;
 var
   F: String;
+  I: Integer;
 begin
   F := ExtractStr(S, ' ');
   if F = '' then begin
@@ -1896,7 +1932,7 @@ begin
   end;
 
   Result := -1;
-  for var I := 0 to High(FlagStrs) do
+  for I := 0 to High(FlagStrs) do
     if StrIComp(FlagStrs[I], PChar(F)) = 0 then begin
       Result := Integer(I);
       Break;
@@ -1906,6 +1942,7 @@ end;
 function ExtractType(var S: String; const TypeEntries: TList): Integer;
 var
   F: String;
+  I: Integer;
 begin
   F := ExtractStr(S, ' ');
   if F = '' then begin
@@ -1915,13 +1952,13 @@ begin
 
   Result := -1;
   if TypeEntries.Count <> 0 then begin
-    for var I := 0 to TypeEntries.Count-1 do
+    for I := 0 to TypeEntries.Count-1 do
       if CompareText(PSetupTypeEntry(TypeEntries[I]).Name, F) = 0 then begin
         Result := Integer(I);
         Break;
       end;
   end else begin
-    for var I := 0 to High(DefaultTypeEntryNames) do
+    for I := 0 to High(DefaultTypeEntryNames) do
       if StrIComp(DefaultTypeEntryNames[I], PChar(F)) = 0 then begin
         Result := Integer(I);
         Break;
@@ -2018,10 +2055,12 @@ const
     'arm32compatible', 'arm64', 'win64',
     'x64', 'x64os', 'x64compatible',
     'x86', 'x86os', 'x86compatible');
+var
+  I: Integer;
 begin
-  for var ArchIdentifier in ArchIdentifiers do begin
-    if Name = ArchIdentifier then begin
-      if ArchIdentifier = 'x64' then
+  for I := Low(ArchIdentifiers) to High(ArchIdentifiers) do begin
+    if Name = ArchIdentifiers[I] then begin
+      if ArchIdentifiers[I] = 'x64' then
         WarningsList.Add(Format(SCompilerArchitectureIdentifierDeprecatedWarning, ['x64', 'x64os', 'x64compatible']));
       Exit(True); { Result doesn't matter }
     end;
@@ -2036,9 +2075,10 @@ function TSetupCompiler.EvalComponentIdentifier(Sender: TSimpleExpression; const
 var
   Found: Boolean;
   ComponentEntry: PSetupComponentEntry;
+  I: Integer;
 begin
   Found := False;
-  for var I := 0 to ComponentEntries.Count-1 do begin
+  for I := 0 to ComponentEntries.Count-1 do begin
     ComponentEntry := PSetupComponentEntry(ComponentEntries[I]);
     if CompareText(ComponentEntry.Name, Name) = 0 then begin
       ComponentEntry.Used := True;
@@ -2057,9 +2097,10 @@ function TSetupCompiler.EvalTaskIdentifier(Sender: TSimpleExpression; const Name
 var
   Found: Boolean;
   TaskEntry: PSetupTaskEntry;
+  I: Integer;
 begin
   Found := False;
-  for var I := 0 to TaskEntries.Count-1 do begin
+  for I := 0 to TaskEntries.Count-1 do begin
     TaskEntry := PSetupTaskEntry(TaskEntries[I]);
     if CompareText(TaskEntry.Name, Name) = 0 then begin
       TaskEntry.Used := True;
@@ -2076,8 +2117,9 @@ function TSetupCompiler.EvalLanguageIdentifier(Sender: TSimpleExpression; const 
   const Parameters: array of const): Boolean;
 var
   LanguageEntry: PSetupLanguageEntry;
+  I: Integer;
 begin
-  for var I := 0 to LanguageEntries.Count-1 do begin
+  for I := 0 to LanguageEntries.Count-1 do begin
     LanguageEntry := PSetupLanguageEntry(LanguageEntries[I]);
     if CompareText(LanguageEntry.Name, Name) = 0 then begin
       Result := True; { Result doesn't matter }
@@ -2241,8 +2283,10 @@ procedure TSetupCompiler.ProcessPermissionsParameter(ParamData: String;
   end;
 
   procedure GetAccessMaskFromName(const AName: String; var AAccessMask: DWORD);
+  var
+    I: Integer;
   begin
-    for var I := Low(AccessMasks) to High(AccessMasks) do
+    for I := Low(AccessMasks) to High(AccessMasks) do
       if CompareText(AName, AccessMasks[I].Name) = 0 then begin
         AAccessMask := AccessMasks[I].Mask;
         Exit;
@@ -2253,7 +2297,7 @@ procedure TSetupCompiler.ProcessPermissionsParameter(ParamData: String;
 var
   Perms, E: AnsiString;
   S: String;
-  PermsCount, P: Integer;
+  PermsCount, P, I: Integer;
   Entry: TGrantPermissionEntry;
   NewPermissionEntry: PSetupPermissionEntry;
 begin
@@ -2282,7 +2326,7 @@ begin
   end
   else begin
     { See if there's already an identical permissions entry }
-    for var I := 0 to PermissionEntries.Count-1 do
+    for I := 0 to PermissionEntries.Count-1 do
       if PSetupPermissionEntry(PermissionEntries[I]).Permissions = Perms then begin
         PermissionsEntry := SmallInt(I);
         Exit;
@@ -2291,7 +2335,7 @@ begin
     PermissionEntries.Expand;
     NewPermissionEntry := AllocMem(SizeOf(NewPermissionEntry^));
     NewPermissionEntry.Permissions := Perms;
-    const I = PermissionEntries.Add(NewPermissionEntry);
+    I := PermissionEntries.Add(NewPermissionEntry);
     if I > High(SmallInt) then
       AbortCompile(SCompilerPermissionsTooMany);
     PermissionsEntry := SmallInt(I);
@@ -2306,6 +2350,8 @@ var
   UnicodeFile, RTFFile: Boolean;
   S: RawByteString;
   U: String;
+  AnsiConvertCodePage: Word;
+  I: Integer;
 begin
   try
     F := TFile.Create(Filename, fdOpenExisting, faRead, fsRead);
@@ -2324,7 +2370,7 @@ begin
       end;
 
       if not UnicodeFile and not RTFFile and (LangIndex >= 0) then begin
-        const AnsiConvertCodePage = TPreLangData(PreLangDataList[LangIndex]).LanguageCodePage;
+        AnsiConvertCodePage := TPreLangData(PreLangDataList[LangIndex]).LanguageCodePage;
         if AnsiConvertCodePage <> 0 then begin
           AddStatus(Format(SCompilerStatusConvertCodePage , [AnsiConvertCodePage]));
           { Convert the ANSI text to Unicode. }
@@ -2608,26 +2654,27 @@ var
 
   procedure HandleWizardStyle(WizardStyle: String);
   const
-    Styles: array of PChar = [
+    Styles: array [0..13] of PChar = (
       'classic', 'modern',
       'light', 'dark', 'dynamic',
       'excludelightbuttons', 'excludelightcontrols',
       'hidebevels',
       'includetitlebar',
-      'polar', 'slate', 'windows11', 'zircon'];
-    StylesGroups: array of Integer = [0, 0, 1, 1, 1, 2, 2, 3, 4, 5, 5, 5, 5];
+      'polar', 'slate', 'windows11', 'zircon', nil);
+    StylesGroups: array [0..12] of Integer = (0, 0, 1, 1, 1, 2, 2, 3, 4, 5, 5, 5, 5);
   var
     StylesGroupSeen: array [0..5] of Boolean;
+    I, R, StyleGroup: Integer;
   begin
-    for var I := Low(StylesGroupSeen) to High(StylesGroupSeen) do
+    for I := Low(StylesGroupSeen) to High(StylesGroupSeen) do
       StylesGroupSeen[I] := False;
     while True do begin
-      const R = ExtractFlag(WizardStyle, Styles);
+      R := ExtractFlag(WizardStyle, Styles);
       case R of
         -2: Break;
         -1: Invalid;
       end;
-      const StyleGroup = StylesGroups[R];
+      StyleGroup := StylesGroups[R];
       if StylesGroupSeen[StyleGroup] then
         Invalid;
       StylesGroupSeen[StyleGroup] := True;
@@ -2881,7 +2928,7 @@ begin
         end
         else if Value = 'smart' then begin
           CompressMethod := cmSmart;
-          CompressLevel := 0;  { Smart mode auto-selects }
+          CompressLevel := 2;  { Smart mode uses LZMA2-compatible default }
         end
         else
           Invalid;
@@ -3509,9 +3556,11 @@ end;
 
 function TSetupCompiler.FindLangEntryIndexByName(const AName: String;
   const Pre: Boolean): Integer;
+var
+  I: Integer;
 begin
   if Pre then begin
-    for var I := 0 to PreLangDataList.Count-1 do begin
+    for I := 0 to PreLangDataList.Count-1 do begin
       if TPreLangData(PreLangDataList[I]).Name = AName then begin
         Result := Integer(I);
         Exit;
@@ -3520,7 +3569,7 @@ begin
     AbortCompileFmt(SCompilerUnknownLanguage, [AName]);
   end;
 
-  for var I := 0 to LanguageEntries.Count-1 do begin
+  for I := 0 to LanguageEntries.Count-1 do begin
     if PSetupLanguageEntry(LanguageEntries[I]).Name = AName then begin
       Result := Integer(I);
       Exit;
@@ -3531,8 +3580,10 @@ begin
 end;
 
 function TSetupCompiler.FindSignToolIndexByName(const AName: String): Integer;
+var
+  I: Integer;
 begin
-  for var I := 0 to SignToolList.Count-1 do begin
+  for I := 0 to SignToolList.Count-1 do begin
     if TSignTool(SignToolList[I]).Name = AName then begin
       Result := Integer(I);
       Exit;
@@ -3582,12 +3633,12 @@ procedure TSetupCompiler.EnumLangOptionsPreProc(const Line: PChar; const Ext: In
 
 var
   KeyName, Value: String;
-  LangIndex: Integer;
+  LangIndex, I: Integer;
 begin
   SeparateDirective(Line, KeyName, Value);
   LangIndex := ExtractLangIndex(Self, KeyName, Ext, True);
   if LangIndex = -1 then begin
-    for var I := 0 to PreLangDataList.Count-1 do
+    for I := 0 to PreLangDataList.Count-1 do
       ApplyToLangEntryPre(KeyName, Value, TPreLangData(PreLangDataList[I]),
         PreLangDataList.Count > 1);
   end else
@@ -3707,12 +3758,12 @@ procedure TSetupCompiler.EnumLangOptionsProc(const Line: PChar; const Ext: Integ
 
 var
   KeyName, Value: String;
-  LangIndex: Integer;
+  LangIndex, I: Integer;
 begin
   SeparateDirective(Line, KeyName, Value);
   LangIndex := ExtractLangIndex(Self, KeyName, Ext, False);
   if LangIndex = -1 then begin
-    for var I := 0 to LanguageEntries.Count-1 do
+    for I := 0 to LanguageEntries.Count-1 do
       ApplyToLangEntry(KeyName, Value, PSetupLanguageEntry(LanguageEntries[I])^,
         LanguageEntries.Count > 1);
   end else
@@ -3722,8 +3773,10 @@ end;
 procedure TSetupCompiler.EnumTypesProc(const Line: PChar; const Ext: Integer);
 
   function IsCustomTypeAlreadyDefined: Boolean;
+  var
+    I: Integer;
   begin
-    for var I := 0 to TypeEntries.Count-1 do
+    for I := 0 to TypeEntries.Count-1 do
       if toIsCustom in PSetupTypeEntry(TypeEntries[I]).Options then begin
         Result := True;
         Exit;
@@ -4803,9 +4856,12 @@ end;
 procedure TSetupCompiler.EnumISSigKeysProc(const Line: PChar; const Ext: Integer);
 
   function ISSigKeysNameExists(const Name: String; const CheckGroupNames: Boolean): Boolean;
+  var
+    I: Integer;
+    ISSigKeyEntryExtraInfo: PISSigKeyEntryExtraInfo;
   begin
-    for var I := 0 to ISSigKeyEntryExtraInfos.Count-1 do begin
-      var ISSigKeyEntryExtraInfo := PISSigKeyEntryExtraInfo(ISSigKeyEntryExtraInfos[I]);
+    for I := 0 to ISSigKeyEntryExtraInfos.Count-1 do begin
+      ISSigKeyEntryExtraInfo := PISSigKeyEntryExtraInfo(ISSigKeyEntryExtraInfos[I]);
       if SameText(ISSigKeyEntryExtraInfo.Name, Name) or
          (CheckGroupNames and ISSigKeyEntryExtraInfo.HasGroupName(Name)) then
         Exit(True)
@@ -4814,9 +4870,12 @@ procedure TSetupCompiler.EnumISSigKeysProc(const Line: PChar; const Ext: Integer
   end;
 
   function ISSigKeysRuntimeIDExists(const RuntimeID: String): Boolean;
+  var
+    I: Integer;
+    ISSigKeyEntry: PSetupISSigKeyEntry;
   begin
-    for var I := 0 to ISSigKeyEntries.Count-1 do begin
-      var ISSigKeyEntry := PSetupISSigKeyEntry(ISSigKeyEntries[I]);
+    for I := 0 to ISSigKeyEntries.Count-1 do begin
+      ISSigKeyEntry := PSetupISSigKeyEntry(ISSigKeyEntries[I]);
       if SameText(ISSigKeyEntry.RuntimeID, RuntimeID) then
         Exit(True)
     end;
@@ -4845,6 +4904,8 @@ var
   Values: array[TParam] of TParamValue;
   NewISSigKeyEntry: PSetupISSigKeyEntry;
   NewISSigKeyEntryExtraInfo: PISSigKeyEntryExtraInfo;
+  GroupName, S, KeyFile: String;
+  N: Integer;
 begin
   ExtractParameters(Line, ParamInfo, Values);
 
@@ -4861,9 +4922,9 @@ begin
         AbortCompileFmt(SCompilerISSigKeysNameOrRuntimeIDExists, [ParamISSigKeysName, Name]);
 
       { Group }
-      var S := Values[paGroup].Data;
+      S := Values[paGroup].Data;
       while True do begin
-        const GroupName = ExtractStr(S, ' ');
+        GroupName := ExtractStr(S, ' ');
         if GroupName = '' then
           Break;
         if not IsValidIdentString(GroupName, False, False) then
@@ -4871,7 +4932,7 @@ begin
         else if SameText(Name, GroupName) or ISSigKeysNameExists(GroupName, False) then
           AbortCompileFmt(SCompilerISSigKeysNameOrRuntimeIDExists, [ParamISSigKeysName, GroupName]);
         if not HasGroupName(GroupName) then begin
-          const N = Length(GroupNames);
+          N := Length(GroupNames);
           SetLength(GroupNames, N+1);
           GroupNames[N] := GroupName;
         end;
@@ -4881,7 +4942,7 @@ begin
     NewISSigKeyEntry := AllocMem(SizeOf(TSetupISSigKeyEntry));
     with NewISSigKeyEntry^ do begin
       { KeyFile & PublicX & PublicY }
-      var KeyFile := PrependSourceDirName(Values[paKeyFile].Data);
+      KeyFile := PrependSourceDirName(Values[paKeyFile].Data);
       PublicX := Values[paPublicX].Data;
       PublicY := Values[paPublicY].Data;
 
@@ -5037,6 +5098,7 @@ var
   NewFileLocationEntryExtraInfo: PFileLocationEntryExtraInfo;
   VersionNumbers: TFileVersionNumbers;
   SourceWildcard, ADestDir, ADestName, AInstallFontName, AStrongAssemblyName: String;
+  I, J: Integer;
   AExcludes: TStringList;
   ReadmeFile, ExternalFile, SourceIsWildcard, RecurseSubdirs,
     AllowUnsafeFiles, Touch, NoTimeStamp, NoCompression, NoEncryption, SolidBreak: Boolean;
@@ -5218,8 +5280,9 @@ type
     CheckName: String;
     SourceFile: String;
     NewRunEntry: PSetupRunEntry;
+    I, J: Integer;
   begin
-    for var I := 0 to FileList.Count-1 do begin
+    for I := 0 to FileList.Count-1 do begin
       FileListRec := FileList[I];
 
       if NewFileEntry = nil then begin
@@ -5257,7 +5320,7 @@ type
         if not DontMergeDuplicateFiles then begin
           { See if the source filename is already in the list of files to
             be compressed. If so, merge it. }
-          const J = FileLocationEntryFilenames.CaseInsensitiveIndexOf(SourceFile);
+          J := FileLocationEntryFilenames.CaseInsensitiveIndexOf(SourceFile);
           if J <> -1 then begin
             NewFileLocationEntry := FileLocationEntries[J];
             NewFileLocationEntryExtraInfo := FileLocationEntryExtraInfos[J];
@@ -5275,7 +5338,7 @@ type
           if NewFileEntry^.FileType = ftUninstExe then
             Include(NewFileLocationEntryExtraInfo^.Flags, floIsUninstExe);
           Inc(TotalBytesToCompress, FileListRec.Size);
-          if SetupHeader.CompressMethod <> cmStored then
+          if CompressMethod <> cmStored then
             Include(NewFileLocationEntry^.Flags, floChunkCompressed);
           if SetupEncryptionHeader.EncryptionUse <> euNone then
             Include(NewFileLocationEntry^.Flags, floChunkEncrypted);
@@ -5463,6 +5526,7 @@ type
     DirListRec: PDirListRec;
     NewDirEntry: PSetupDirEntry;
     BaseFileEntry: PSetupFileEntry;
+    I: Integer;
   begin
     if NewFileEntry <> nil then
       { If NewFileEntry is still assigned it means ProcessFileList didn't
@@ -5472,7 +5536,7 @@ type
       BaseFileEntry := PrevFileEntry;
 
     if not(foDontCopy in BaseFileEntry.Options) then begin
-      for var I := 0 to DirList.Count-1 do begin
+      for I := 0 to DirList.Count-1 do begin
         DirListRec := DirList[I];
 
         NewDirEntry := AllocMem(Sizeof(TSetupDirEntry));
@@ -5497,6 +5561,10 @@ type
 var
   FileList, DirList: TList;
   SortFilesByExtension, SortFilesByName: Boolean;
+  S, KeyNameOrGroupName: String;
+  FoundKey: Boolean;
+  KeyIndex: Integer;
+  ISSigKeyEntryExtraInfo: PISSigKeyEntryExtraInfo;
 begin
   CallIdleProc;
 
@@ -5688,14 +5756,14 @@ begin
                end;
 
                { ISSigAllowedKeys }
-               var S := Values[paISSigAllowedKeys].Data;
+               S := Values[paISSigAllowedKeys].Data;
                while True do begin
-                 const KeyNameOrGroupName = ExtractStr(S, ' ');
+                 KeyNameOrGroupName := ExtractStr(S, ' ');
                  if KeyNameOrGroupName = '' then
                    Break;
-                 var FoundKey := False;
-                 for var KeyIndex := 0 to ISSigKeyEntryExtraInfos.Count-1 do begin
-                   var ISSigKeyEntryExtraInfo := PISSigKeyEntryExtraInfo(ISSigKeyEntryExtraInfos[KeyIndex]);
+                 FoundKey := False;
+                 for KeyIndex := 0 to ISSigKeyEntryExtraInfos.Count-1 do begin
+                   ISSigKeyEntryExtraInfo := PISSigKeyEntryExtraInfo(ISSigKeyEntryExtraInfos[KeyIndex]);
                    if SameText(ISSigKeyEntryExtraInfo.Name, KeyNameOrGroupName) or
                       ISSigKeyEntryExtraInfo.HasGroupName(KeyNameOrGroupName) then begin
                      SetISSigAllowedKey(Verification.ISSigAllowedKeys, Integer(KeyIndex));
@@ -5890,10 +5958,10 @@ begin
           end;
         end;
       finally
-        for var I := DirList.Count-1 downto 0 do
+        for I := DirList.Count-1 downto 0 do
           Dispose(PDirListRec(DirList[I]));
         DirList.Free();
-        for var I := FileList.Count-1 downto 0 do
+        for I := FileList.Count-1 downto 0 do
           Dispose(PFileListRec(FileList[I]));
         FileList.Free();
       end;
@@ -6237,7 +6305,7 @@ end;
 procedure TSetupCompiler.EnumMessagesProc(const Line: PChar; const Ext: Integer);
 var
   P, P2: PChar;
-  ID, LangIndex: Integer;
+  ID, LangIndex, I: Integer;
   N, M: String;
 begin
   P := StrScan(Line, '=');
@@ -6278,7 +6346,7 @@ begin
     DefaultLangData.MessagesDefined[TSetupMessageID(ID)] := True;
   end
   else begin
-    for var I := 0 to LangDataList.Count-1 do begin
+    for I := 0 to LangDataList.Count-1 do begin
       if (LangIndex <> -1) and (I <> LangIndex) then
         Continue;
       TLangData(LangDataList[I]).Messages[TSetupMessageID(ID)] := M;
@@ -6309,28 +6377,28 @@ procedure TSetupCompiler.EnumCustomMessagesProc(const Line: PChar; const Ext: In
     end;
   end;
 
-var
-  P: PChar;
-  LangIndex: Integer;
-  N: String;
-  ExistingCustomMessageEntry, NewCustomMessageEntry: PSetupCustomMessageEntry;
-begin
-  P := StrScan(Line, '=');
-  if P = nil then
-    AbortCompile(SCompilerMessagesMissingEquals);
-  SetString(N, Line, P - Line);
-  N := Trim(N);
-  LangIndex := ExtractLangIndex(Self, N, Ext, False);
-  Inc(P);
+  var
+    P: PChar;
+    LangIndex, I: Integer;
+    N: String;
+    ExistingCustomMessageEntry, NewCustomMessageEntry: PSetupCustomMessageEntry;
+  begin
+    P := StrScan(Line, '=');
+    if P = nil then
+      AbortCompile(SCompilerMessagesMissingEquals);
+    SetString(N, Line, P - Line);
+    N := Trim(N);
+    LangIndex := ExtractLangIndex(Self, N, Ext, False);
+    Inc(P);
 
-  CustomMessageEntries.Expand;
-  NewCustomMessageEntry := AllocMem(SizeOf(TSetupCustomMessageEntry));
-  try
-    if not IsValidIdentString(N, False, True) then
-      AbortCompile(SCompilerCustomMessageBadName);
+    CustomMessageEntries.Expand;
+    NewCustomMessageEntry := AllocMem(SizeOf(TSetupCustomMessageEntry));
+    try
+      if not IsValidIdentString(N, False, True) then
+        AbortCompile(SCompilerCustomMessageBadName);
 
-    { Delete existing entries}
-    for var I := CustomMessageEntries.Count-1 downto 0 do begin
+      { Delete existing entries}
+      for I := CustomMessageEntries.Count-1 downto 0 do begin
       ExistingCustomMessageEntry := CustomMessageEntries[I];
       if (CompareText(ExistingCustomMessageEntry.Name, N) = 0) and
          ((LangIndex = -1) or (ExistingCustomMessageEntry.LangIndex = LangIndex)) then begin
@@ -6356,15 +6424,16 @@ procedure TSetupCompiler.CheckCustomMessageDefinitions;
 var
   MissingLang, Found: Boolean;
   CustomMessage1, CustomMessage2: PSetupCustomMessageEntry;
+  I, J, K: Integer;
 begin
-  for var I := 0 to CustomMessageEntries.Count-1 do begin
+  for I := 0 to CustomMessageEntries.Count-1 do begin
     CustomMessage1 := PSetupCustomMessageEntry(CustomMessageEntries[I]);
     if CustomMessage1.LangIndex <> -1 then begin
       MissingLang := False;
-      for var J := 0 to LanguageEntries.Count-1 do begin
+      for J := 0 to LanguageEntries.Count-1 do begin
         { Check whether the outer custom message name exists for this language }
         Found := False;
-        for var K := 0 to CustomMessageEntries.Count-1 do begin
+        for K := 0 to CustomMessageEntries.Count-1 do begin
           CustomMessage2 := PSetupCustomMessageEntry(CustomMessageEntries[K]);
           if CompareText(CustomMessage1.Name, CustomMessage2.Name) = 0 then begin
             if (CustomMessage2.LangIndex = -1) or (CustomMessage2.LangIndex = J) then begin
@@ -6399,11 +6468,12 @@ var
   LineInfo: TLineInfo;
   Found: Boolean;
   S: String;
+  I, J: Integer;
 begin
-  for var I := 0 to ExpectedCustomMessageNames.Count-1 do begin
+  for I := 0 to ExpectedCustomMessageNames.Count-1 do begin
     Found := False;
     S := ExpectedCustomMessageNames[I];
-    for var J := 0 to CustomMessageEntries.Count-1 do begin
+    for J := 0 to CustomMessageEntries.Count-1 do begin
       if CompareText(PSetupCustomMessageEntry(CustomMessageEntries[J]).Name, S) = 0 then begin
         Found := True;
         Break;
@@ -6570,6 +6640,8 @@ procedure TSetupCompiler.ReadMessagesFromScript;
 
 var
   LangData: TLangData;
+  I: Integer;
+  J: TSetupMessageID;
 begin
   { If there were no [Languages] entries, take this opportunity to create a
     default language }
@@ -6588,9 +6660,9 @@ begin
   CallIdleProc;
 
   { Check for missing messages }
-  for var I := 0 to LanguageEntries.Count-1 do begin
+  for I := 0 to LanguageEntries.Count-1 do begin
     LangData := LangDataList[I];
-    for var J := Low(LangData.Messages) to High(LangData.Messages) do
+    for J := Low(LangData.Messages) to High(LangData.Messages) do begin
       if not LangData.MessagesDefined[J] and not IsOptional(J) then begin
         { Use the message from Default.isl }
         if MissingMessagesWarning and not (J in [msgHelpTextNote, msgTranslatorNote]) then
@@ -6600,6 +6672,7 @@ begin
             { ^ Copy(..., 4, Maxint) is to skip past "msg" }
         LangData.Messages[J] := DefaultLangData.Messages[J];
       end;
+    end;
   end;
   CallIdleProc;
 end;
@@ -6618,9 +6691,10 @@ var
   LangData: TLangData;
   M: TMemoryStream;
   I: TSetupMessageID;
+  L: Integer;
   Header: TMessagesHeader;
 begin
-  for var L := 0 to LanguageEntries.Count-1 do begin
+  for L := 0 to LanguageEntries.Count-1 do begin
     LangData := LangDataList[L];
 
     M := TMemoryStream.Create;
@@ -6819,9 +6893,11 @@ begin
 end;
 
 procedure SignCommandLog(const S: String; const Error, FirstLine: Boolean; const Data: NativeInt);
+var
+  SetupCompiler: TSetupCompiler;
 begin
   if S <> '' then begin
-    var SetupCompiler := TSetupCompiler(Data);
+    SetupCompiler := TSetupCompiler(Data);
     SetupCompiler.AddStatus('   ' + S, Error);
   end;
 end;
@@ -6872,6 +6948,13 @@ procedure TSetupCompiler.SignCommand(const AName, ACommand, AParams, AExeFilenam
 
   procedure InternalSignCommand(const AFormattedCommand: String;
     const Delay: Cardinal);
+  var
+    StartupInfo: TStartupInfo;
+    OutputReader: TCreateProcessOutputReader;
+    InheritHandles: Boolean;
+    dwCreationFlags: DWORD;
+    ProcessInfo: TProcessInformation;
+    LastError, ExitCode: DWORD;
   begin
     {Also see IsppFuncs' Exec }
 
@@ -6883,22 +6966,20 @@ procedure TSetupCompiler.SignCommand(const AName, ACommand, AParams, AExeFilenam
 
     LastSignCommandStartTick := GetTickCount;
 
-    var StartupInfo: TStartupInfo;
     FillChar(StartupInfo, SizeOf(StartupInfo), 0);
     StartupInfo.cb := SizeOf(StartupInfo);
     StartupInfo.dwFlags := STARTF_USESHOWWINDOW;
     StartupInfo.wShowWindow := Word(IfThen(RunMinimized, SW_SHOWMINNOACTIVE, SW_SHOWNORMAL));
 
-    var OutputReader := TCreateProcessOutputReader.Create(SignCommandLog, NativeInt(Self));
+    OutputReader := TCreateProcessOutputReader.Create(SignCommandLog, NativeInt(Self));
     try
-      var InheritHandles := True;
-      var dwCreationFlags: DWORD := CREATE_DEFAULT_ERROR_MODE or CREATE_NO_WINDOW;
+      InheritHandles := True;
+      dwCreationFlags := CREATE_DEFAULT_ERROR_MODE or CREATE_NO_WINDOW;
       OutputReader.UpdateStartupInfo(StartupInfo);
 
-      var ProcessInfo: TProcessInformation;
       if not CreateProcess(nil, PChar(AFormattedCommand), nil, nil, InheritHandles,
          dwCreationFlags, nil, PChar(CompilerDir), StartupInfo, ProcessInfo) then begin
-        var LastError := GetLastError;
+        LastError := GetLastError;
         AbortCompileFmt(SCompilerSignToolCreateProcessFailed, [LastError,
           Win32ErrorString(LastError)]);
       end;
@@ -6921,7 +7002,6 @@ procedure TSetupCompiler.SignCommand(const AName, ACommand, AParams, AExeFilenam
           end;
         end;
         OutputReader.Read(True);
-        var ExitCode: DWORD;
         if not GetExitCodeProcess(ProcessInfo.hProcess, ExitCode) then
           AbortCompile('Sign: GetExitCodeProcess failed');
         if ExitCode <> 0 then
@@ -6937,6 +7017,8 @@ procedure TSetupCompiler.SignCommand(const AName, ACommand, AParams, AExeFilenam
 var
   Params, Command: String;
   FileNameSequenceFound1, FileNameSequenceFound2: Boolean;
+  I: Integer;
+  MinimumTimeBetweenDelay, CurrentTick, TickDelta: Cardinal;
 begin
   Params := FmtCommand(PChar(AParams), '', AExeFileName, FileNameSequenceFound1);
   Command := FmtCommand(PChar(ACommand), Params, AExeFileName, FileNameSequenceFound2);
@@ -6944,12 +7026,11 @@ begin
   if not FileNameSequenceFound1 and not FileNameSequenceFound2 then
     AbortCompileFmt(SCompilerSignToolFileNameSequenceNotFound, [AName]);
 
-  for var I := 0 to RetryCount do begin
+  for I := 0 to RetryCount do begin
     try
-      var MinimumTimeBetweenDelay: Cardinal;
-      const CurrentTick = GetTickCount;
+      CurrentTick := GetTickCount;
       if (MinimumTimeBetween <> 0) and (LastSignCommandStartTick <> 0) then begin
-        const TickDelta = Cardinal(CurrentTick - LastSignCommandStartTick);
+        TickDelta := Cardinal(CurrentTick - LastSignCommandStartTick);
         if TickDelta < MinimumTimeBetween then
           MinimumTimeBetweenDelay := MinimumTimeBetween - TickDelta
         else
@@ -7087,24 +7168,30 @@ procedure TSetupCompiler.Compile;
   end;
 
   procedure ClearSEList(const List: TList; const NumStrings, NumAnsiStrings: Integer);
+  var
+    I: Integer;
   begin
-    for var I := List.Count-1 downto 0 do begin
+    for I := List.Count-1 downto 0 do begin
       SEFreeRec(List[I], NumStrings, NumAnsiStrings);
       List.Delete(I);
     end;
   end;
 
   procedure ClearPreLangDataList;
+  var
+    I: Integer;
   begin
-    for var I := PreLangDataList.Count-1 downto 0 do begin
+    for I := PreLangDataList.Count-1 downto 0 do begin
       TPreLangData(PreLangDataList[I]).Free;
       PreLangDataList.Delete(I);
     end;
   end;
 
   procedure ClearLangDataList;
+  var
+    I: Integer;
   begin
-    for var I := LangDataList.Count-1 downto 0 do begin
+    for I := LangDataList.Count-1 downto 0 do begin
       TLangData(LangDataList[I]).Free;
       LangDataList.Delete(I);
     end;
@@ -7143,25 +7230,31 @@ var
   DecompressorDLL, SevenZipDLL: TMemoryStream;
 
   SizeOfExe, SizeOfHeaders: Int64;
+  I: Integer;
 
   function WriteSetup0(const F: TFile): Int64;
 
     procedure WriteStream(Stream: TCustomMemoryStream; W: TCompressedBlockWriter);
+    var
+      Size: Cardinal;
     begin
       if Stream.Size > High(Cardinal) then
         AbortCompileFmt(SCompilerCompressInternalError, ['Unexpected Stream.Size value']);
-      const Size = Cardinal(Stream.Size);
+      Size := Cardinal(Stream.Size);
       W.Write(Size, SizeOf(Size));
       W.Write(Stream.Memory^, Size);
     end;
 
     function WizardImagesEqual(const Left, Right: TWizardImages): Boolean;
+    var
+      I: Integer;
+      LeftStream, RightStream: TCustomMemoryStream;
     begin
       if Left.Count <> Right.Count then
         Exit(False);
-      for var I := 0 to Left.Count-1 do begin
-        var LeftStream := Left[I];
-        var RightStream := Right[I];
+      for I := 0 to Left.Count-1 do begin
+        LeftStream := Left[I];
+        RightStream := Right[I];
         if LeftStream.Size <> RightStream.Size then
           Exit(False);
         if (LeftStream.Size > High(NativeUInt)) or
@@ -7173,8 +7266,9 @@ var
 
     procedure WriteWizardImages(const WizardImages: TWizardImages; const W: TCompressedBlockWriter;
       const CompareTo: TWizardImages = nil);
+    var
+      Count, I: Integer;
     begin
-      var Count: Integer;
       if WizardImages <> nil then begin
         if (CompareTo <> nil) and (WizardImages.Count > 0) and WizardImagesEqual(WizardImages, CompareTo) then begin
           Count := -1;
@@ -7182,7 +7276,7 @@ var
         end else begin
           Count := Integer(WizardImages.Count);
           W.Write(Count, SizeOf(Integer));
-          for var I := 0 to Count-1 do
+          for I := 0 to Count-1 do
             WriteStream(WizardImages[I], W);
         end;
       end else begin
@@ -7193,12 +7287,15 @@ var
 
   var
     W: TCompressedBlockWriter;
+    J: Integer;
+    StartPosition: Int64;
+    SetupEncryptionHeaderCRC: DWORD;
   begin
-    const StartPosition = F.Position;
+    StartPosition := F.Position;
 
     F.WriteBuffer(SetupID, SizeOf(SetupID));
 
-    const SetupEncryptionHeaderCRC = GetCRC32(SetupEncryptionHeader, SizeOf(SetupEncryptionHeader));
+    SetupEncryptionHeaderCRC := GetCRC32(SetupEncryptionHeader, SizeOf(SetupEncryptionHeader));
     F.WriteBuffer(SetupEncryptionHeaderCRC, SizeOf(SetupEncryptionHeaderCRC));
     F.WriteBuffer(SetupEncryptionHeader, SizeOf(SetupEncryptionHeader));
 
@@ -7233,52 +7330,52 @@ var
       SECompressedBlockWrite(W, SetupHeader, SizeOf(SetupHeader),
         SetupHeaderStrings, SetupHeaderAnsiStrings);
 
-      for var J := 0 to LanguageEntries.Count-1 do
+      for J := 0 to LanguageEntries.Count-1 do
         SECompressedBlockWrite(W, LanguageEntries[J]^, SizeOf(TSetupLanguageEntry),
           SetupLanguageEntryStrings, SetupLanguageEntryAnsiStrings);
-      for var J := 0 to CustomMessageEntries.Count-1 do
+      for J := 0 to CustomMessageEntries.Count-1 do
         SECompressedBlockWrite(W, CustomMessageEntries[J]^, SizeOf(TSetupCustomMessageEntry),
           SetupCustomMessageEntryStrings, SetupCustomMessageEntryAnsiStrings);
-      for var J := 0 to PermissionEntries.Count-1 do
+      for J := 0 to PermissionEntries.Count-1 do
         SECompressedBlockWrite(W, PermissionEntries[J]^, SizeOf(TSetupPermissionEntry),
           SetupPermissionEntryStrings, SetupPermissionEntryAnsiStrings);
-      for var J := 0 to TypeEntries.Count-1 do
+      for J := 0 to TypeEntries.Count-1 do
         SECompressedBlockWrite(W, TypeEntries[J]^, SizeOf(TSetupTypeEntry),
           SetupTypeEntryStrings, SetupTypeEntryAnsiStrings);
-      for var J := 0 to ComponentEntries.Count-1 do
+      for J := 0 to ComponentEntries.Count-1 do
         SECompressedBlockWrite(W, ComponentEntries[J]^, SizeOf(TSetupComponentEntry),
           SetupComponentEntryStrings, SetupComponentEntryAnsiStrings);
-      for var J := 0 to TaskEntries.Count-1 do
+      for J := 0 to TaskEntries.Count-1 do
         SECompressedBlockWrite(W, TaskEntries[J]^, SizeOf(TSetupTaskEntry),
           SetupTaskEntryStrings, SetupTaskEntryAnsiStrings);
-      for var J := 0 to DirEntries.Count-1 do
+      for J := 0 to DirEntries.Count-1 do
         SECompressedBlockWrite(W, DirEntries[J]^, SizeOf(TSetupDirEntry),
           SetupDirEntryStrings, SetupDirEntryAnsiStrings);
-      for var J := 0 to ISSigKeyEntries.Count-1 do
+      for J := 0 to ISSigKeyEntries.Count-1 do
         SECompressedBlockWrite(W, ISSigKeyEntries[J]^, SizeOf(TSetupISSigKeyEntry),
           SetupISSigKeyEntryStrings, SetupISSigKeyEntryAnsiStrings);
-      for var J := 0 to FileEntries.Count-1 do
+      for J := 0 to FileEntries.Count-1 do
         SECompressedBlockWrite(W, FileEntries[J]^, SizeOf(TSetupFileEntry),
           SetupFileEntryStrings, SetupFileEntryAnsiStrings);
-      for var J := 0 to IconEntries.Count-1 do
+      for J := 0 to IconEntries.Count-1 do
         SECompressedBlockWrite(W, IconEntries[J]^, SizeOf(TSetupIconEntry),
           SetupIconEntryStrings, SetupIconEntryAnsiStrings);
-      for var J := 0 to IniEntries.Count-1 do
+      for J := 0 to IniEntries.Count-1 do
         SECompressedBlockWrite(W, IniEntries[J]^, SizeOf(TSetupIniEntry),
           SetupIniEntryStrings, SetupIniEntryAnsiStrings);
-      for var J := 0 to RegistryEntries.Count-1 do
+      for J := 0 to RegistryEntries.Count-1 do
         SECompressedBlockWrite(W, RegistryEntries[J]^, SizeOf(TSetupRegistryEntry),
           SetupRegistryEntryStrings, SetupRegistryEntryAnsiStrings);
-      for var J := 0 to InstallDeleteEntries.Count-1 do
+      for J := 0 to InstallDeleteEntries.Count-1 do
         SECompressedBlockWrite(W, InstallDeleteEntries[J]^, SizeOf(TSetupDeleteEntry),
           SetupDeleteEntryStrings, SetupDeleteEntryAnsiStrings);
-      for var J := 0 to UninstallDeleteEntries.Count-1 do
+      for J := 0 to UninstallDeleteEntries.Count-1 do
         SECompressedBlockWrite(W, UninstallDeleteEntries[J]^, SizeOf(TSetupDeleteEntry),
           SetupDeleteEntryStrings, SetupDeleteEntryAnsiStrings);
-      for var J := 0 to RunEntries.Count-1 do
+      for J := 0 to RunEntries.Count-1 do
         SECompressedBlockWrite(W, RunEntries[J]^, SizeOf(TSetupRunEntry),
           SetupRunEntryStrings, SetupRunEntryAnsiStrings);
-      for var J := 0 to UninstallRunEntries.Count-1 do
+      for J := 0 to UninstallRunEntries.Count-1 do
         SECompressedBlockWrite(W, UninstallRunEntries[J]^, SizeOf(TSetupRunEntry),
           SetupRunEntryStrings, SetupRunEntryAnsiStrings);
 
@@ -7308,7 +7405,7 @@ var
     try
       if SetupEncryptionHeader.EncryptionUse = euFull then
         W.InitEncryption(CryptKey, SetupEncryptionHeader.BaseNonce, sccCompressedBlocks2);
-      for var J := 0 to FileLocationEntries.Count-1 do
+      for J := 0 to FileLocationEntries.Count-1 do
         W.Write(FileLocationEntries[J]^, SizeOf(TSetupFileLocationEntry));
       W.Finish;
     finally
@@ -7341,10 +7438,15 @@ var
   procedure WithRetries(const AlsoRetryOnAlreadyExists: Boolean;
     const Filename: String; const Op: TProc);
   { Op should always raise EFileError or EResUpdateError on failure. }
+  var
+    SavedException: TObject;
+    Ex: TObject;
+    I: Integer;
+    {$IFDEF TESTRETRIES} First: Boolean; {$ENDIF}
   begin
-    var SavedException: TObject := nil;
+    SavedException := nil;
     try
-      {$IFDEF TESTRETRIES} var First := True; {$ENDIF}
+      {$IFDEF TESTRETRIES} First := True; {$ENDIF}
       PerformFileOperationWithRetries(4, AlsoRetryOnAlreadyExists,
         function {Op}(out ErrorCode: Cardinal): Boolean
         begin
@@ -7382,9 +7484,11 @@ var
           end;
         end,
         procedure {Failing}(const LastError: Cardinal)
+        var
+          I: Integer;
         begin
           AddStatusFmt(SCompilerStatusOutputFileInUse, [LastError, PathExtractName(Filename)]);
-          for var I := 0 to 9 do begin
+          for I := 0 to 9 do begin
             Sleep(100);
             CallIdleProc; { May raise an exception }
           end;
@@ -7392,7 +7496,7 @@ var
         procedure {Failed}(const LastError: Cardinal; var TryOnceMore: Boolean)
         begin
           if SavedException <> nil then begin
-            const Ex = SavedException;
+            Ex := SavedException;
             SavedException := nil;
             raise Ex;
           end else
@@ -7409,6 +7513,7 @@ var
     const BytesToReserveOnFirstDisk: Int64);
   var
     CurrentTime: TSystemTime;
+    SavedCompressMethod: TSetupCompressMethod;
 
     procedure ApplyTouchDateTime(var FT: TFileTime);
     var
@@ -7448,47 +7553,12 @@ var
         AbortCompile('ApplyTouch: SystemTimeToFileTime call failed');
     end;
 
-    function GetCompressorClass(const UseCompression: Boolean): TCustomCompressorClass;
+    function GetCompressorClass(const UseCompression: Boolean; const FileName: String; const FileSize: Int64): TCustomCompressorClass;
     begin
       if not UseCompression then
         Result := TStoredCompressor
-      else begin
-        case SetupHeader.CompressMethod of
-          cmStored: begin
-              Result := TStoredCompressor;
-            end;
-          cmZip: begin
-              InitZipDLL;
-              Result := TZCompressor;
-            end;
-          cmBzip: begin
-              InitBzipDLL;
-              Result := TBZCompressor;
-            end;
-          cmLZMA: begin
-              Result := TLZMACompressor;
-            end;
-          cmLZMA2: begin
-              Result := TLZMA2Compressor;
-            end;
-          cmBrotli: begin
-              LoadBrotliDLL;
-              Result := TBrotliCompressor;
-            end;
-          cmZstd: begin
-              LoadZstdDLL;
-              Result := TZstdCompressor;
-            end;
-          cmSmart: begin
-              { Smart mode: for now, use Zstd as default }
-              LoadZstdDLL;
-              Result := TZstdCompressor;
-            end;
-        else
-          AbortCompile('GetCompressorClass: Unknown CompressMethod');
-          Result := nil;
-        end;
-      end;
+      else
+        Result := Compiler.CompressionFactory.GetCompressorClass(SetupHeader.CompressMethod, FileName, FileSize);
     end;
 
     procedure FinalizeChunk(const CH: TCompressionHandler;
@@ -7528,6 +7598,14 @@ var
     SignatureAddress, SignatureSize: Cardinal;
     HdrChecksum, ErrorCode: DWORD;
     ISSigAvailableKeys: TArrayOfECDSAKey;
+    RecommendedClass, NewCompressorClass: TCustomCompressorClass;
+    I, L: Integer;
+    ISSigKeyEntry: PSetupISSigKeyEntry;
+    FileLocationEntryFilename, ExpectedFileName, ISSigKeyUsedID: String;
+    ExpectedFileHash: TSHA256Digest;
+    ExpectedFileSize: Int64;
+    VerifyResultAsString: String;
+    TimeStampInt: Int64;
   begin
     {$IFNDEF WIN64}
     if (SetupHeader.CompressMethod in [cmLZMA, cmLZMA2]) and
@@ -7551,177 +7629,187 @@ var
     end else
       CH := TCompressionHandler.Create(Self, '');
     SetLength(ISSigAvailableKeys, ISSigKeyEntries.Count);
-    for var I := 0 to ISSigKeyEntries.Count-1 do
+    for I := 0 to ISSigKeyEntries.Count-1 do
       ISSigAvailableKeys[I] := nil;
-    try
-      for var I := 0 to ISSigKeyEntries.Count-1 do begin
-        const ISSigKeyEntry = PSetupISSigKeyEntry(ISSigKeyEntries[I]);
-        ISSigAvailableKeys[I] := TECDSAKey.Create;
-        try
-          ISSigImportPublicKey(ISSigAvailableKeys[I], '', ISSigKeyEntry.PublicX, ISSigKeyEntry.PublicY); { shouldn't fail: values checked already }
-        except
-          AbortCompileFmt(SCompilerCompressInternalError, ['ISSigImportPublicKey failed: ' + GetExceptMessage]);
+
+    SavedCompressMethod := SetupHeader.CompressMethod; // Added this line
+    try // This try block is for ISSigAvailableKeys and CH.Free
+      try // This try block is for CH.Finish
+        for I := 0 to ISSigKeyEntries.Count-1 do begin
+          ISSigKeyEntry := PSetupISSigKeyEntry(ISSigKeyEntries[I]);
+          ISSigAvailableKeys[I] := TECDSAKey.Create;
+          try
+            ISSigImportPublicKey(ISSigAvailableKeys[I], '', ISSigKeyEntry.PublicX, ISSigKeyEntry.PublicY); { shouldn't fail: values checked already }
+          except
+            AbortCompileFmt(SCompilerCompressInternalError, ['ISSigImportPublicKey failed: ' + GetExceptMessage]);
+          end;
         end;
-      end;
 
-      if DiskSpanning then begin
-        if not CH.ReserveBytesOnSlice(BytesToReserveOnFirstDisk) then
-          AbortCompile(SCompilerNotEnoughSpaceOnFirstDisk);
-      end;
+        if DiskSpanning then begin
+          if not CH.ReserveBytesOnSlice(BytesToReserveOnFirstDisk) then
+            AbortCompile(SCompilerNotEnoughSpaceOnFirstDisk);
+        end;
 
-      CompressionStartTick := GetTickCount;
-      CompressionInProgress := True;
+        CompressionStartTick := GetTickCount;
+        CompressionInProgress := True;
 
-      for var I := 0 to FileLocationEntries.Count-1 do begin
-        FL := FileLocationEntries[I];
-        FLExtraInfo := FileLocationEntryExtraInfos[I];
-        const FileLocationEntryFilename = FileLocationEntryFilenames[Integer(I)];
+        for I := 0 to FileLocationEntries.Count-1 do begin
+          FL := FileLocationEntries[I];
+          FLExtraInfo := FileLocationEntryExtraInfos[I];
+          FileLocationEntryFilename := FileLocationEntryFilenames[Integer(I)];
 
-        if FLExtraInfo.Sign <> fsNoSetting then begin
-          var SignatureFound := False;
-          if FLExtraInfo.Sign in [fsOnce, fsCheck] then begin
-            { Check the file for a signature }
-            SourceFile := TFile.Create(FileLocationEntryFilename,
-              fdOpenExisting, faRead, fsRead);
-            try
-              if ReadSignatureAndChecksumFields(SourceFile, SignatureAddress,
-                   SignatureSize, HdrChecksum) or
-                 ReadSignatureAndChecksumFields64(SourceFile, SignatureAddress,
-                   SignatureSize, HdrChecksum) then
-                SignatureFound := SignatureSize <> 0;
-            finally
-              SourceFile.Free;
+          if FLExtraInfo.Sign <> fsNoSetting then begin
+            var SignatureFound := False;
+            if FLExtraInfo.Sign in [fsOnce, fsCheck] then begin
+              { Check the file for a signature }
+              SourceFile := TFile.Create(FileLocationEntryFilename,
+                fdOpenExisting, faRead, fsRead);
+              try
+                if ReadSignatureAndChecksumFields(SourceFile, SignatureAddress,
+                     SignatureSize, HdrChecksum) or
+                   ReadSignatureAndChecksumFields64(SourceFile, SignatureAddress,
+                     SignatureSize, HdrChecksum) then
+                  SignatureFound := SignatureSize <> 0;
+              finally
+                SourceFile.Free;
+              end;
             end;
+
+            if (FLExtraInfo.Sign = fsYes) or ((FLExtraInfo.Sign = fsOnce) and not SignatureFound) then begin
+              AddStatus(Format(SCompilerStatusSigningSourceFile, [FileLocationEntryFilename]));
+              Sign(FileLocationEntryFilename);
+              CallIdleProc;
+            end else if FLExtraInfo.Sign = fsOnce then
+              AddStatus(Format(SCompilerStatusSourceFileAlreadySigned, [FileLocationEntryFilename]))
+            else if (FLExtraInfo.Sign = fsCheck) and not SignatureFound then
+              AbortCompileFmt(SCompilerSourceFileNotSigned, [FileLocationEntryFilename]);
           end;
 
-          if (FLExtraInfo.Sign = fsYes) or ((FLExtraInfo.Sign = fsOnce) and not SignatureFound) then begin
-            AddStatus(Format(SCompilerStatusSigningSourceFile, [FileLocationEntryFilename]));
-            Sign(FileLocationEntryFilename);
-            CallIdleProc;
-          end else if FLExtraInfo.Sign = fsOnce then
-            AddStatus(Format(SCompilerStatusSourceFileAlreadySigned, [FileLocationEntryFilename]))
-          else if (FLExtraInfo.Sign = fsCheck) and not SignatureFound then
-            AbortCompileFmt(SCompilerSourceFileNotSigned, [FileLocationEntryFilename]);
-        end;
+          if floVersionInfoValid in FL.Flags then
+            AddStatus(Format(StatusFilesStoringOrCompressingVersionStrings[floChunkCompressed in FL.Flags],
+              [FileLocationEntryFilename,
+               LongRec(FL.FileVersionMS).Hi, LongRec(FL.FileVersionMS).Lo,
+               LongRec(FL.FileVersionLS).Hi, LongRec(FL.FileVersionLS).Lo]))
+          else
+            AddStatus(Format(StatusFilesStoringOrCompressingStrings[floChunkCompressed in FL.Flags],
+              [FileLocationEntryFilename]));
+          CallIdleProc;
 
-        if floVersionInfoValid in FL.Flags then
-          AddStatus(Format(StatusFilesStoringOrCompressingVersionStrings[floChunkCompressed in FL.Flags],
-            [FileLocationEntryFilename,
-             LongRec(FL.FileVersionMS).Hi, LongRec(FL.FileVersionMS).Lo,
-             LongRec(FL.FileVersionLS).Hi, LongRec(FL.FileVersionLS).Lo]))
-        else
-          AddStatus(Format(StatusFilesStoringOrCompressingStrings[floChunkCompressed in FL.Flags],
-            [FileLocationEntryFilename]));
-        CallIdleProc;
-
-        SourceFile := TFile.Create(FileLocationEntryFilename,
-          fdOpenExisting, faRead, fsRead);
-        try
-          var ExpectedFileHash: TSHA256Digest;
-          if FLExtraInfo.Verification.Typ = fvHash then
-            ExpectedFileHash := FLExtraInfo.Verification.Hash
-          else if FLExtraInfo.Verification.Typ = fvISSig then begin
-            { See Setup.Install's CopySourceFileToDestFile for similar code }
-            if Length(ISSigAvailableKeys) = 0 then { shouldn't fail: flag stripped already }
-              AbortCompileFmt(SCompilerCompressInternalError, ['Length(ISSigAvailableKeys) = 0']);
-            var ExpectedFileName: String;
-            var ExpectedFileSize: Int64;
-            if not ISSigVerifySignature(FileLocationEntryFilename,
-              GetISSigAllowedKeys(ISSigAvailableKeys, FLExtraInfo.Verification.ISSigAllowedKeys),
-              ExpectedFileName, ExpectedFileSize, ExpectedFileHash, FLExtraInfo.ISSigKeyUsedID,
-              nil,
-              procedure(const Filename, SigFilename: String)
-              begin
-                VerificationError(veSignatureMissing, Filename, SigFilename);
-              end,
-              procedure(const Filename, SigFilename: String; const VerifyResult: TISSigVerifySignatureResult)
-              begin
-                var VerifyResultAsString: String;
-                case VerifyResult of
-                  vsrMalformed: VerificationError(veSignatureMalformed, Filename, SigFilename);
-                  vsrBad: VerificationError(veSignatureBad, Filename, SigFilename);
-                  vsrKeyNotFound: VerificationError(veKeyNotFound, Filename, SigFilename);
-                else
-                  AbortCompileFmt(SCompilerCompressInternalError, ['Unknown ISSigVerifySignature result'])
-                end;
-              end
-            ) then
-              AbortCompileFmt(SCompilerCompressInternalError, ['Unexpected ISSigVerifySignature result']);
-            if (ExpectedFileName <> '') and not PathSame(PathExtractName(FileLocationEntryFilename), ExpectedFileName) then
-              VerificationError(veFileNameIncorrect, FileLocationEntryFilename);
-            if SourceFile.Size <> ExpectedFileSize then
-              VerificationError(veFileSizeIncorrect, FileLocationEntryFilename);
-            { ExpectedFileHash checked below after compression }
-          end;
-
-          if CH.ChunkStarted then begin
-            { End the current chunk if one of the following conditions is true:
-              - we're not using solid compression
-              - the "solidbreak" flag was specified on this file
-              - the compression or encryption status of this file is
-                different from the previous file(s) in the chunk }
-            if not UseSolidCompression or
-               (floSolidBreak in FLExtraInfo.Flags) or
-               (ChunkCompressed <> (floChunkCompressed in FL.Flags)) or
-               (CH.ChunkEncrypted <> (floChunkEncrypted in FL.Flags)) then
-              FinalizeChunk(CH, Integer(I-1));
-          end;
-          { Start a new chunk if needed }
-          if not CH.ChunkStarted then begin
-            ChunkCompressed := (floChunkCompressed in FL.Flags);
-            CH.NewChunk(GetCompressorClass(ChunkCompressed), CompressLevel,
-              CompressProps, floChunkEncrypted in FL.Flags, CryptKey);
-          end;
-
-          FL.FirstSlice := CH.ChunkFirstSlice;
-          FL.StartOffset := CH.ChunkStartOffset;
-          FL.ChunkSuboffset := CH.ChunkBytesRead;
-          FL.OriginalSize := SourceFile.Size;
-
-          if not GetFileTime(SourceFile.Handle, nil, nil, @FT) then begin
-            ErrorCode := GetLastError;
-            AbortCompileFmt(SCompilerFunctionFailedWithCode,
-              ['CompressFiles: GetFileTime', ErrorCode, Win32ErrorString(ErrorCode)]);
-          end;
-          if floNoTimeStamp in FLExtraInfo.Flags then
-            FL.TimeStamp.Clear
-          else begin
-            if TimeStampsInUTC then begin
-              FL.TimeStamp := FT;
-              Include(FL.Flags, floTimeStampInUTC);
-            end else
-              FileTimeToLocalFileTime(FT, FL.TimeStamp);
-            if floTouch in FLExtraInfo.Flags then
-              ApplyTouchDateTime(FL.TimeStamp);
-            if TimeStampRounding > 0 then begin
-              var TimeStamp := Int64(FL.TimeStamp);
-              Dec(TimeStamp, TimeStamp mod (TimeStampRounding * 10000000));
-              FL.TimeStamp := TFileTime(TimeStamp);
+          SourceFile := TFile.Create(FileLocationEntryFilename,
+            fdOpenExisting, faRead, fsRead);
+          try
+            if FLExtraInfo.Verification.Typ = fvHash then
+              ExpectedFileHash := FLExtraInfo.Verification.Hash
+            else if FLExtraInfo.Verification.Typ = fvISSig then begin
+              { See Setup.Install's CopySourceFileToDestFile for similar code }
+              if Length(ISSigAvailableKeys) = 0 then { shouldn't fail: flag stripped already }
+                AbortCompileFmt(SCompilerCompressInternalError, ['Length(ISSigAvailableKeys) = 0']);
+              if not ISSigVerifySignature(FileLocationEntryFilename,
+                GetISSigAllowedKeys(ISSigAvailableKeys, FLExtraInfo.Verification.ISSigAllowedKeys),
+                ExpectedFileName, ExpectedFileSize, ExpectedFileHash, ISSigKeyUsedID,
+                nil,
+                procedure(const Filename, SigFilename: String)
+                begin
+                  VerificationError(veSignatureMissing, Filename, SigFilename);
+                end,
+                procedure(const Filename, SigFilename: String; const VerifyResult: TISSigVerifySignatureResult)
+                begin
+                  case VerifyResult of
+                    vsrMalformed: VerificationError(veSignatureMalformed, Filename, SigFilename);
+                    vsrBad: VerificationError(veSignatureBad, Filename, SigFilename);
+                    vsrKeyNotFound: VerificationError(veKeyNotFound, Filename, SigFilename);
+                  else
+                    AbortCompileFmt(SCompilerCompressInternalError, ['Unknown ISSigVerifySignature result'])
+                  end;
+                end
+              ) then
+                AbortCompileFmt(SCompilerCompressInternalError, ['Unexpected ISSigVerifySignature result']);
+              FLExtraInfo.ISSigKeyUsedID := ISSigKeyUsedID;
+              if (ExpectedFileName <> '') and not PathSame(PathExtractName(FileLocationEntryFilename), ExpectedFileName) then
+                VerificationError(veFileNameIncorrect, FileLocationEntryFilename);
+              if SourceFile.Size <> ExpectedFileSize then
+                VerificationError(veFileSizeIncorrect, FileLocationEntryFilename);
+              { ExpectedFileHash checked below after compression }
             end;
+
+            if CH.ChunkStarted then begin
+              { End the current chunk if one of the following conditions is true:
+                - we're not using solid compression
+                - the "solidbreak" flag was specified on this file
+                - the compression or encryption status of this file is
+                  different from the previous file(s) in the chunk
+                - for Smart Compression: the recommended algorithm class
+                  changed for this file }
+              RecommendedClass := GetCompressorClass(floChunkCompressed in FL.Flags, FileLocationEntryFilename, SourceFile.Size);
+              if not UseSolidCompression or
+                 (floSolidBreak in FLExtraInfo.Flags) or
+                 (ChunkCompressed <> (floChunkCompressed in FL.Flags)) or
+                 (CH.ChunkEncrypted <> (floChunkEncrypted in FL.Flags)) or
+                 (ChunkCompressed and (CH.Compressor <> nil) and (CH.Compressor.ClassType <> RecommendedClass)) then
+                FinalizeChunk(CH, Integer(I-1));
+            end;
+            { Start a new chunk if needed }
+            if not CH.ChunkStarted then begin
+              ChunkCompressed := (floChunkCompressed in FL.Flags);
+              NewCompressorClass := GetCompressorClass(ChunkCompressed, FileLocationEntryFilename, SourceFile.Size);
+              if ChunkCompressed and (NewCompressorClass <> nil) then
+                AddStatus('      Algorithm: ' + NewCompressorClass.ClassName);
+              CH.NewChunk(NewCompressorClass, CompressLevel,
+                CompressProps, floChunkEncrypted in FL.Flags, CryptKey);
+            end;
+
+            FL.FirstSlice := CH.ChunkFirstSlice;
+            FL.StartOffset := CH.ChunkStartOffset;
+            FL.ChunkSuboffset := CH.ChunkBytesRead;
+            FL.OriginalSize := SourceFile.Size;
+
+            if not GetFileTime(SourceFile.Handle, nil, nil, @FT) then begin
+              ErrorCode := GetLastError;
+              AbortCompileFmt(SCompilerFunctionFailedWithCode,
+                ['CompressFiles: GetFileTime', ErrorCode, Win32ErrorString(ErrorCode)]);
+            end;
+            if floNoTimeStamp in FLExtraInfo.Flags then
+              FL.TimeStamp.Clear
+            else begin
+              if TimeStampsInUTC then begin
+                FL.TimeStamp := FT;
+                Include(FL.Flags, floTimeStampInUTC);
+              end else
+                FileTimeToLocalFileTime(FT, FL.TimeStamp);
+              if floTouch in FLExtraInfo.Flags then
+                ApplyTouchDateTime(FL.TimeStamp);
+              if TimeStampRounding > 0 then begin
+                TimeStampInt := Int64(FL.TimeStamp);
+                Dec(TimeStampInt, TimeStampInt mod (TimeStampRounding * 10000000));
+                FL.TimeStamp := TFileTime(TimeStampInt);
+              end;
+            end;
+
+            if ChunkCompressed and IsX86OrX64Executable(SourceFile) then
+              Include(FL.Flags, floCallInstructionOptimized);
+
+            CH.CompressFile(SourceFile, FL.OriginalSize,
+              floCallInstructionOptimized in FL.Flags, FL.SHA256Sum);
+
+            if FLExtraInfo.Verification.Typ <> fvNone then begin
+              if not SHA256DigestsEqual(FL.SHA256Sum, ExpectedFileHash) then
+                VerificationError(veFileHashIncorrect, FileLocationEntryFilename);
+              AddStatus(SCompilerStatusVerified);
+            end;
+          finally
+            SourceFile.Free;
           end;
-
-          if ChunkCompressed and IsX86OrX64Executable(SourceFile) then
-            Include(FL.Flags, floCallInstructionOptimized);
-
-          CH.CompressFile(SourceFile, FL.OriginalSize,
-            floCallInstructionOptimized in FL.Flags, FL.SHA256Sum);
-
-          if FLExtraInfo.Verification.Typ <> fvNone then begin
-            if not SHA256DigestsEqual(FL.SHA256Sum, ExpectedFileHash) then
-              VerificationError(veFileHashIncorrect, FileLocationEntryFilename);
-            AddStatus(SCompilerStatusVerified);
-          end;
-        finally
-          SourceFile.Free;
         end;
-      end;
-      { Finalize the last chunk }
-      FinalizeChunk(CH, Integer(FileLocationEntries.Count-1));
+        { Finalize the last chunk }
+        FinalizeChunk(CH, Integer(FileLocationEntries.Count-1));
 
-      CH.Finish;
+      finally
+        CH.Finish;
+      end;
     finally
       CompressionInProgress := False;
-      for var I := 0 to Length(ISSigAvailableKeys)-1 do
+      SetupHeader.CompressMethod := SavedCompressMethod;
+      for I := 0 to Length(ISSigAvailableKeys)-1 do
         ISSigAvailableKeys[I].Free;
       CH.Free;
     end;
@@ -8045,7 +8133,8 @@ var
     F: TTextFileWriter;
     FL: PSetupFileLocationEntry;
     FLExtraInfo: PFileLocationEntryExtraInfo;
-    S: String;
+    S, FileLocationEntryFilename: String;
+    I: Integer;
   begin
     F := TTextFileWriter.Create(PrependDirName(OutputManifestFile, OutputDir),
       fdCreateAlways, faWrite, fsRead);
@@ -8057,10 +8146,10 @@ var
         'ISSigKeyID';
       F.WriteLine(S);
 
-      for var I := 0 to FileLocationEntries.Count-1 do begin
+      for I := 0 to FileLocationEntries.Count-1 do begin
         FL := FileLocationEntries[I];
         FLExtraInfo := FileLocationEntryExtraInfos[I];
-        const FileLocationEntryFilename = FileLocationEntryFilenames[Integer(I)];
+        FileLocationEntryFilename := FileLocationEntryFilenames[Integer(I)];
         S := IntToStr(I) + #9 + FileLocationEntryFilename + #9 +
           FileTimeToString(FL.TimeStamp, floTimeStampInUTC in FL.Flags) + #9;
         if floVersionInfoValid in FL.Flags then
@@ -8124,6 +8213,10 @@ begin
   CompilerDir := AddBackslash(PathExpand(CompilerDir));
   InitPreprocessor;
   InitLZMADLL;
+  if InitializeCompressionDLLs then
+    AddStatus('Smart Compression DLLs loaded successfully')
+  else
+    AddStatus('Smart Compression DLLs failed to load');
 
   WizardImages := nil;
   WizardSmallImages := nil;
@@ -9024,7 +9117,7 @@ begin
 
     { Done }
     AddStatus('');
-    for var I := 0 to WarningsList.Count-1 do
+    for I := 0 to WarningsList.Count-1 do
       AddStatus(SCompilerStatusWarning + WarningsList[I], True);
     EmbedCompilerCopyrightString;
   finally
@@ -9059,11 +9152,11 @@ begin
     ClearSEList(RunEntries, SetupRunEntryStrings, SetupRunEntryAnsiStrings);
     ClearSEList(UninstallRunEntries, SetupRunEntryStrings, SetupRunEntryAnsiStrings);
     FileLocationEntryFilenames.Clear;
-    for var I := FileLocationEntryExtraInfos.Count-1 downto 0 do begin
+    for I := FileLocationEntryExtraInfos.Count-1 downto 0 do begin
       Dispose(PFileLocationEntryExtraInfo(FileLocationEntryExtraInfos[I]));
       FileLocationEntryExtraInfos.Delete(I);
     end;
-    for var I := ISSigKeyEntryExtraInfos.Count-1 downto 0 do begin
+    for I := ISSigKeyEntryExtraInfos.Count-1 downto 0 do begin
       Dispose(PISSigKeyEntryExtraInfo(ISSigKeyEntryExtraInfos[I]));
       ISSigKeyEntryExtraInfos.Delete(I);
     end;

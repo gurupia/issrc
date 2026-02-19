@@ -235,6 +235,8 @@ var
   Res: Cardinal;
 begin
   if not FInitialized then begin
+    if not Assigned(ZSTD_createCCtx) then
+      raise ECompressInternalError.Create('Zstd: Compressor DLL not loaded');
     FCCtx := ZSTD_createCCtx;
     if FCCtx = nil then
       raise ECompressInternalError.Create(SZstdInitError);
@@ -252,7 +254,7 @@ procedure TZstdCompressor.EndCompress;
 begin
   if FInitialized then begin
     FInitialized := False;
-    if Assigned(FCCtx) then begin
+    if Assigned(FCCtx) and Assigned(ZSTD_freeCCtx) then begin
       ZSTD_freeCCtx(FCCtx);
       FCCtx := nil;
     end;
@@ -357,6 +359,8 @@ constructor TZstdDecompressor.Create(AReadProc: TDecompressorReadProc);
 begin
   inherited Create(AReadProc);
 
+  if not Assigned(ZSTD_createDCtx) then
+    raise ECompressInternalError.Create('Zstd: Decompressor DLL not loaded');
   FDCtx := ZSTD_createDCtx;
   if FDCtx = nil then
     raise ECompressInternalError.Create(SZstdInitError);
@@ -368,7 +372,7 @@ end;
 
 destructor TZstdDecompressor.Destroy;
 begin
-  if FInitialized and Assigned(FDCtx) then
+  if FInitialized and Assigned(FDCtx) and Assigned(ZSTD_freeDCtx) then
     ZSTD_freeDCtx(FDCtx);
   inherited Destroy;
 end;

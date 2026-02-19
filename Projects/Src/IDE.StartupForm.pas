@@ -38,8 +38,8 @@ type
     procedure OKButtonClick(Sender: TObject);
     procedure FormAfterMonitorDpiChanged(Sender: TObject; OldDPI,
       NewDPI: Integer);
-    procedure DonateBitBtnClick(Sender: TObject);
-    procedure MailingListBitBtnClick(Sender: TObject);
+    //procedure DonateBitBtnClick(Sender: TObject);
+    //procedure MailingListBitBtnClick(Sender: TObject);
   private
     FResult: TStartupFormResult;
     FResultMainFileName: TFileName;
@@ -100,19 +100,20 @@ begin
   InitFormFont(Self);
   InitFormTheme(Self);
 
-  if IsLicensed then begin
+  { Commented out - DonateBitBtn and MailingListBitBtn components removed from DFM }
+  {if IsLicensed then begin
     DonateBitBtn.Visible := False;
     const DiffX = MailingListBitBtn.Left - DonateBitBtn.Left;
     MailingListBitBtn.Left := MailingListBitBtn.Left - DiffX;
     StartupCheck.Left := StartupCheck.Left - DiffX;
   end else
-	  DonateBitBtn.Hint := MainForm.UpdatePanelDonateBitBtn.Hint;
+    DonateBitBtn.Hint := MainForm.UpdatePanelDonateBitBtn.Hint;
 
   if InitFormThemeIsDark then begin
     if DonateBitBtn.Visible then
       DonateBitBtn.Bitmap := DonateImageDark.Bitmap;
     MailingListBitBtn.Bitmap := MailingListImageDark.Bitmap;
-  end;
+  end;}
 
   UpdateImages;
 
@@ -163,6 +164,8 @@ begin
   OpenRadioButton.Checked := True;
 end;
 
+{ DonateBitBtn and MailingListBitBtn components removed from DFM - handlers commented out }
+(*
 procedure TStartupForm.DonateBitBtnClick(Sender: TObject);
 begin
   OpenDonateSite;
@@ -172,6 +175,7 @@ procedure TStartupForm.MailingListBitBtnClick(Sender: TObject);
 begin
   OpenMailingListSite;
 end;
+*)
 
 procedure TStartupForm.OKButtonClick(Sender: TObject);
 begin

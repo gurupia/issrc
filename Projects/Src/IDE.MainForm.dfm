@@ -37,6 +37,16 @@ object MainForm: TMainForm
     BevelOuter = bvNone
     FullRepaint = False
     TabOrder = 3
+    object MemosTabSet: TNewTabSet
+      Left = 0
+      Top = 0
+      Width = 361
+      Height = 21
+      Align = alTop
+      Visible = False
+      OnClick = MemosTabSetClick
+      OnCloseButtonClick = MemosTabSetOnCloseButtonClick
+    end
     object SplitPanel: TPanel
       Left = 0
       Top = 107
@@ -120,6 +130,15 @@ object MainForm: TMainForm
         TabOrder = 0
         OnDrawItem = CompilerOutputListDrawItem
         OnKeyDown = OutputListKeyDown
+      end
+      object OutputTabSet: TNewTabSet
+        Left = 0
+        Top = 0
+        Width = 361
+        Height = 21
+        Align = alTop
+        TabPosition = tpTop
+        OnClick = OutputTabSetClick
       end
     end
   end
@@ -326,8 +345,24 @@ object MainForm: TMainForm
         Width = 8
         Style = tbsSeparator
       end
-      object HelpButton: TToolButton
+      object CompressionComboBox: TComboBox
         Left = 316
+        Top = 0
+        Width = 110
+        Height = 21
+        Hint = 'Compression Method'
+        Style = csDropDownList
+        TabOrder = 0
+        OnChange = CompressionComboBoxChange
+      end
+      object ToolButton6: TToolButton
+        Left = 426
+        Top = 0
+        Width = 8
+        Style = tbsSeparator
+      end
+      object HelpButton: TToolButton
+        Left = 434
         Top = 0
         Hint = 'Help (F1)'
         ImageIndex = 9
@@ -356,6 +391,21 @@ object MainForm: TMainForm
         'ee what'#39's new</a>.'
       TabOrder = 0
       OnLinkClick = UpdateLinkLabelLinkClick
+    end
+    object UpdatePanelDonateBitBtn: TBitmapButton
+      Left = 320
+      Top = 13
+      Width = 16
+      Height = 16
+      OnClick = UpdatePanelDonateBitBtnClick
+    end
+    object UpdatePanelCloseBitBtn: TBitmapButton
+      Left = 340
+      Top = 13
+      Width = 16
+      Height = 16
+      OnClick = UpdatePanelCloseBitBtnClick
+      OnPaint = UpdatePanelCloseBitBtnPaint
     end
   end
   object MainMenu1: TMainMenu

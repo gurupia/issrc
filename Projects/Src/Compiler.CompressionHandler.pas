@@ -58,6 +58,7 @@ type
     property ChunkStartOffset: Int64 read FChunkStartOffset;
     property ChunkStarted: Boolean read FChunkStarted;
     property CurSlice: Integer read FCurSlice;
+    property Compressor: TCustomCompressor read FCompressor;
   end;
 
 implementation
@@ -76,9 +77,11 @@ begin
 end;
 
 destructor TCompressionHandler.Destroy;
+var
+  I: Integer;
 begin
   if Assigned(FCachedCompressors) then begin
-    for var I := FCachedCompressors.Count-1 downto 0 do
+    for I := FCachedCompressors.Count-1 downto 0 do
       TCustomCompressor(FCachedCompressors[I]).Free;
     FreeAndNil(FCachedCompressors);
   end;

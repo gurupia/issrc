@@ -15,7 +15,7 @@ interface
 
 uses
   Dialogs,
-  IDE.MainForm, IDE.MainForm.NavigationHelper;
+  IDE.MainForm, IDE.MainForm.NavigationHelper, NewTabSet;
 
 type
   TMainFormFindReplaceHelper = class helper(TMainFormNavigationHelper) for TMainForm

@@ -211,6 +211,8 @@ const
   BROTLI_PARAM_QUALITY = 0;
 begin
   if not FInitialized then begin
+    if not Assigned(BrotliEncoderCreateInstance) then
+      raise ECompressInternalError.Create('Brotli: Encoder DLL not loaded');
     FState := BrotliEncoderCreateInstance(nil, nil, nil);
     if FState = nil then
       raise ECompressInternalError.Create(SBrotliInitError);
@@ -227,7 +229,7 @@ procedure TBrotliCompressor.EndCompress;
 begin
   if FInitialized then begin
     FInitialized := False;
-    if Assigned(FState) then begin
+    if Assigned(FState) and Assigned(BrotliEncoderDestroyInstance) then begin
       BrotliEncoderDestroyInstance(FState);
       FState := nil;
     end;
@@ -311,6 +313,8 @@ constructor TBrotliDecompressor.Create(AReadProc: TDecompressorReadProc);
 begin
   inherited Create(AReadProc);
   
+  if not Assigned(BrotliDecoderCreateInstance) then
+    raise ECompressInternalError.Create('Brotli: Decoder DLL not loaded');
   FState := BrotliDecoderCreateInstance(nil, nil, nil);
   if FState = nil then
     raise ECompressInternalError.Create('Brotli: Failed to initialize decoder');
@@ -322,7 +326,7 @@ end;
 
 destructor TBrotliDecompressor.Destroy;
 begin
-  if FInitialized and Assigned(FState) then
+  if FInitialized and Assigned(FState) and Assigned(BrotliDecoderDestroyInstance) then
     BrotliDecoderDestroyInstance(FState);
   inherited Destroy;
 end;

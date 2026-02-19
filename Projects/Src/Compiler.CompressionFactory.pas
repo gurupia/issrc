@@ -18,7 +18,7 @@ uses
 
 { Factory function to get compressor class from compression method }
 function GetCompressorClass(const Method: TSetupCompressMethod;
-  const FileName: String = ''): TCustomCompressorClass;
+  const FileName: String = ''; const FileSize: Int64 = 0): TCustomCompressorClass;
 
 { Get recommended compression level for method }
 function GetDefaultCompressionLevel(const Method: TSetupCompressMethod): Integer;
@@ -32,20 +32,20 @@ uses
   Compression.LZMACompressor, Compression.Zlib;
 
 function GetCompressorClass(const Method: TSetupCompressMethod;
-  const FileName: String): TCustomCompressorClass;
+  const FileName: String; const FileSize: Int64): TCustomCompressorClass;
 var
   Category: TFileCategory;
   Strategy: TCompressionLevel;
 begin
   case Method of
     cmStored:
-      Result := nil;  { No compression }
+      Result := TStoredCompressor;  { No compression }
       
     cmZip:
       Result := TZCompressor;
       
     cmBzip:
-      Result := nil;  { Not implemented in this version }
+      Result := TLZMA2Compressor;  { Not implemented in this version, fallback to LZMA2 }
       
     cmLZMA:
       Result := TLZMACompressor;
@@ -74,11 +74,11 @@ begin
         { Smart selection based on file type }
         if FileName <> '' then begin
           Category := DetectFileCategory(FileName);
-          Strategy := SelectCompressionStrategy(Category, 0, scmAuto);
+          Strategy := SelectCompressionStrategy(Category, FileSize, scmAuto);
           
           case Strategy.Strategy of
             csStored:
-              Result := nil;
+              Result := TStoredCompressor;
               
             csBrotli:
               if IsBrotliAvailable then

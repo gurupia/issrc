@@ -26,7 +26,7 @@ uses
   Generics.Collections, UIStateForm, StdCtrls, ExtCtrls, Menus, Buttons, ComCtrls, CommCtrl,
   ScintInt, ScintEdit, IDE.ScintStylerInnoSetup, NewTabSet, ModernColors, IDE.IDEScintEdit,
   Shared.DebugStruct, Shared.CompilerInt.Struct, NewUxTheme, ImageList, ImgList, ToolWin, IDE.HelperFunc,
-  VirtualImageList, BaseImageCollection, BitmapButton;
+  VirtualImageList, BaseImageCollection, BitmapButton, BitmapImage;
 
 const
   WM_StartCommandLineCompile = WM_USER + $1000;
@@ -265,6 +265,8 @@ type
     TargetSetupButton: TToolButton;
     TargetUninstallButton: TToolButton;
     ToolButton5: TToolButton;
+    CompressionComboBox: TComboBox;
+    ToolButton6: TToolButton;
     HelpButton: TToolButton;
     Bevel1: TBevel;
     TerminateButton: TToolButton;
@@ -322,6 +324,10 @@ type
     UpdatePanel: TPanel;
     UpdateLinkLabel: TLinkLabel;
     EGotoFile: TMenuItem;
+    MemosTabSet: TNewTabSet;
+    OutputTabSet: TNewTabSet;
+    UpdatePanelDonateBitBtn: TBitmapButton;
+    UpdatePanelCloseBitBtn: TBitmapButton;
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure FExitClick(Sender: TObject);
     procedure FOpenMainFileClick(Sender: TObject);
@@ -367,6 +373,7 @@ type
     procedure RParametersClick(Sender: TObject);
     procedure POutputListCopyClick(Sender: TObject);
     procedure BStopCompileClick(Sender: TObject);
+    procedure CompressionComboBoxChange(Sender: TObject);
     procedure EGotoLineClick(Sender: TObject);
     procedure RTerminateClick(Sender: TObject);
     procedure BMenuClick(Sender: TObject);
@@ -1030,14 +1037,30 @@ begin
 
   FTheme := TTheme.Create;
   InitFormThemeInit(FTheme);
-  MemosTabSet.Theme := FTheme;
-  OutputTabSet.Theme := FTheme;
+  if Assigned(MemosTabSet) then
+    MemosTabSet.Theme := FTheme;
+  if Assigned(OutputTabSet) then
+    OutputTabSet.Theme := FTheme;
 
   ToolBarPanel.ParentBackground := False;
   UpdatePanel.ParentBackground := False;
-  UpdatePanelDonateBitBtn.Hint := RemoveAccelChar(HDonate.Caption);
+  if Assigned(UpdatePanelDonateBitBtn) then
+    UpdatePanelDonateBitBtn.Hint := RemoveAccelChar(HDonate.Caption);
 
   UpdateImages;
+
+  { Initialize Compression ComboBox }
+  if Assigned(CompressionComboBox) then begin
+    CompressionComboBox.Items.Add('lzma2 (default)');
+    CompressionComboBox.Items.Add('lzma');
+    CompressionComboBox.Items.Add('zip');
+    CompressionComboBox.Items.Add('bzip');
+    CompressionComboBox.Items.Add('zstd (fast)');
+    CompressionComboBox.Items.Add('brotli (small)');
+    CompressionComboBox.Items.Add('smart (auto)');
+    CompressionComboBox.Items.Add('none');
+    CompressionComboBox.ItemIndex := 0; { Default: lzma2 }
+  end;
 
   FMemos := TList<TIDEScintEdit>.Create;
   FMainMemo := InitializeMainMemo(TIDEScintFileEdit.Create(Self), PopupMenu);
@@ -1061,7 +1084,8 @@ begin
 
   FMemosStyler.Theme := FTheme;
 
-  MemosTabSet.PopupMenu := TMainFormPopupMenu.Create(Self, MemosTabSetPopupMenu);
+  if Assigned(MemosTabSet) then
+    MemosTabSet.PopupMenu := TMainFormPopupMenu.Create(Self, MemosTabSetPopupMenu);
   FFirstTabSelectShortCut := ShortCut(Ord('1'), [ssCtrl]);
   FLastTabSelectShortCut := ShortCut(Ord('9'), [ssCtrl]);
 
@@ -1316,7 +1340,7 @@ begin
       ForwardNavButtonClick(Self);
   end else if (AShortCut >= FFirstTabSelectShortCut) and (AShortCut <= FLastTabSelectShortCut) then begin
     Key := 0;
-    if MemosTabSet.Visible then begin
+    if Assigned(MemosTabSet) and MemosTabSet.Visible then begin
       var TabIndex := AShortCut - FFirstTabSelectShortCut;
       if TabIndex < 8 then begin
         if TabIndex < MemosTabSet.Tabs.Count then
@@ -2298,6 +2322,21 @@ begin
     Options := '';
     for I := 0 to FSignTools.Count-1 do
       Options := Options + AddSignToolParam(FSignTools[I]);
+
+    { Add compression option based on ComboBox selection }
+    if Assigned(CompressionComboBox) then begin
+      case CompressionComboBox.ItemIndex of
+        0: { lzma2 (default) - no need to add option };
+        1: Options := Options + 'Compression=lzma'#0;
+        2: Options := Options + 'Compression=zip'#0;
+        3: Options := Options + 'Compression=bzip'#0;
+        4: Options := Options + 'Compression=zstd'#0;
+        5: Options := Options + 'Compression=brotli'#0;
+        6: Options := Options + 'Compression=smart'#0;
+        7: Options := Options + 'Compression=none'#0;
+      end;
+    end;
+
     Params.Options := PChar(Options);
 
     AppData.Form := Self;
@@ -3142,6 +3181,12 @@ begin
   end;
 end;
 
+procedure TMainForm.CompressionComboBoxChange(Sender: TObject);
+begin
+  { Compression method changed - will be used in next compile }
+  { No immediate action needed, CompileFile will read the selection }
+end;
+
 procedure TMainForm.BLowPriorityClick(Sender: TObject);
 begin
   FOptions.LowPriorityDuringCompile := not FOptions.LowPriorityDuringCompile;
@@ -3388,6 +3433,8 @@ procedure TMainForm.MemosTabSetClick(Sender: TObject);
 begin
   if FIgnoreTabSetClick then
     Exit;
+  if not Assigned(MemosTabSet) then
+    Exit;
 
   var NewActiveMemo := TabIndexToMemo(MemosTabSet.TabIndex, MemosTabSet.Tabs.Count-1);
   if NewActiveMemo <> FActiveMemo then begin
@@ -3571,11 +3618,19 @@ end;
 procedure TMainForm.UpdateImages;
 { Should be called at startup and after DPI changes }
 begin
+  if not Assigned(FTheme) or not Assigned(ImagesModule) then
+    Exit;
   var WH := MulDiv(16, CurrentPPI, 96);
   var Images := ImagesModule.ToolbarImageCollection[FTheme.Dark];
+  if not Assigned(Images) then
+    Exit;
 
-  var Image := Images.GetSourceImage(Images.GetIndexByName('heart-filled'), WH, WH);
-  UpdatePanelDonateBitBtn.Graphic := Image;
+  var Index := Images.GetIndexByName('heart-filled');
+  if Index <> -1 then begin
+    var Image := Images.GetSourceImage(Index, WH, WH);
+    if Assigned(UpdatePanelDonateBitBtn) then
+      UpdatePanelDonateBitBtn.Graphic := Image;
+  end;
 end;
 
 procedure TMainForm.UpdateOutputTabSetListsItemHeightAndDebugTimeWidth;
@@ -3952,7 +4007,10 @@ begin
   else if AMemo = FPreprocessorOutputMemo then begin
     if not FPreprocessorOutputMemo.Used then
       raise Exception.Create('not FPreprocessorOutputMemo.Used');
-    Result := MemosTabSet.Tabs.Count-1 { Last tab displays the preprocessor output memo }
+    if Assigned(MemosTabSet) then
+      Result := MemosTabSet.Tabs.Count-1 { Last tab displays the preprocessor output memo }
+    else
+      Result := 0;
   end else begin
     Result := Integer(FFileMemos.IndexOf(AMemo as TIDEScintFileEdit)); { Other tabs display include files which start second tab }
 
@@ -4147,6 +4205,8 @@ end;
 
 procedure TMainForm.UpdateMemosTabSetVisibility;
 begin
+  if not Assigned(MemosTabSet) then
+    Exit;
   MemosTabSet.Visible := FPreprocessorOutputMemo.Used or FFileMemos[FirstIncludedFilesMemoIndex].Used;
   if not MemosTabSet.Visible then
     MemosTabSet.TabIndex := 0; { For next time }
@@ -4264,6 +4324,8 @@ var
   I, SaveTabIndex: Integer;
   SaveTabName: String;
 begin
+  if not Assigned(MemosTabSet) then
+    Exit;
   NewTabs := nil;
   NewHints := nil;
   NewCloseButtons := nil;
@@ -5533,11 +5595,12 @@ begin
     UpdateLinkLabel.Caption := FUpdatePanelMessages[MessageToShowIndex].Msg;
     if not FHighContrastActive then
       UpdatePanel.Color := FUpdatePanelMessages[MessageToShowIndex].Color;
-	  if FUpdatePanelMessages[MessageToShowIndex].ConfigIdent.StartsWith('Purchase') then
-	    FDonateImageMenuItem := HPurchase
-	  else
-	    FDonateImageMenuItem := HDonate;
-	  UpdatePanelDonateBitBtn.Hint := RemoveAccelChar(FDonateImageMenuItem.Caption)
+
+    if FUpdatePanelMessages[MessageToShowIndex].ConfigIdent.StartsWith('Purchase') then
+      FDonateImageMenuItem := HPurchase
+    else
+      FDonateImageMenuItem := HDonate;
+    UpdatePanelDonateBitBtn.Hint := RemoveAccelChar(FDonateImageMenuItem.Caption);
   end;
   UpdateBevel1Visibility;
 end;
@@ -5972,7 +6035,7 @@ end;
 
 procedure TMainForm.StatusBarClick(Sender: TObject);
 begin
-  if MemosTabSet.Visible and FOptions.OpenIncludedFiles and (FHiddenFiles.Count > 0) then begin
+  if Assigned(MemosTabSet) and MemosTabSet.Visible and FOptions.OpenIncludedFiles and (FHiddenFiles.Count > 0) then begin
     var Point := SmallPointToPoint(TSmallPoint(GetMessagePos()));
     var X := StatusBar.ScreenToClient(Point).X;
     var W := 0;
@@ -5996,7 +6059,7 @@ const
 begin
   case Panel.Index of
     spHiddenFilesCount:
-      if MemosTabSet.Visible and FOptions.OpenIncludedFiles and (FHiddenFiles.Count > 0) then begin
+      if Assigned(MemosTabSet) and MemosTabSet.Visible and FOptions.OpenIncludedFiles and (FHiddenFiles.Count > 0) then begin
         var RText := Rect;
         if FToolbarThemeData <> 0 then begin
           Dec(RText.Right, RText.Bottom - RText.Top);
@@ -6592,11 +6655,17 @@ begin
 end;
 
 procedure TMainForm.UpdateBevel1Visibility;
+var
+  MemosTabSetVisible: Boolean;
 begin
   { Bevel1 is the line between the toolbar and memos when there's nothing in
     between and the color of the toolbar and memo margins is the same }
+  if Assigned(MemosTabSet) then
+    MemosTabSetVisible := MemosTabSet.Visible
+  else
+    MemosTabSetVisible := False;  
   Bevel1.Visible := (ToolBarPanel.Color = FTheme.Colors[tcMarginBack]) and
-                    not UpdatePanel.Visible and not MemosTabSet.Visible;
+                    not UpdatePanel.Visible and not MemosTabSetVisible;
 end;
 
 initialization
@@ -6607,6 +6676,8 @@ initialization
   if DefFontData.Name = 'MS Sans Serif' then
     DefFontData.Name := AnsiString(GetPreferredUIFont);
   CoInitialize(nil);
+  RegisterClass(TNewTabSet);
+  RegisterClass(TBitmapButton);
 finalization
   CoUninitialize();
 end.

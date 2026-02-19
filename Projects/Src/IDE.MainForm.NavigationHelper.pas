@@ -17,7 +17,7 @@ uses
   Messages,
   Menus,
   IDE.MainForm, IDE.MainForm.UAHHelper,
-  IDE.IDEScintEdit;
+  IDE.IDEScintEdit, NewTabSet;
 
 type
   TMainFormNavigationHelper = class helper(TMainFormUAHHelper) for TMainForm

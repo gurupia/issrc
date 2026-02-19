@@ -39,8 +39,10 @@ uses
   PathFunc, TrustFunc;
 
 procedure InitISCmplrLibrary;
+var
+  FileName: String;
 begin
-  var FileName := AddBackslash(PathExtractPath(ParamStr(0))) + ISCmplrDLL;
+  FileName := AddBackslash(PathExtractPath(ParamStr(0))) + ISCmplrDLL;
   ISCmplrLibrary := LoadTrustedLibrary(FileName, [ltloTrustAllOnDebug]);
   if ISCmplrLibrary <> 0 then begin
     ISDllCompileScript := GetProcAddress(ISCmplrLibrary, 'ISDllCompileScriptW');
