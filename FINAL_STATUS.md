@@ -22,6 +22,26 @@
 
 ---
 
+### **Phase 6: 코드 리뷰 및 안정성 강화 (2026-02-19)**
+
+> 전체 소스 14개 파일 심층 리뷰 후 6개 커밋으로 14개 개선점 적용
+
+- ✅ **GDI+ 리소스 누수 해결**: `ApplyTheme()` 호출마다 누적되던 `Font`/`ImageList` Dispose 처리 (`9046abc`)
+- ✅ **Race Condition 방지**: `CompilerWrapper`에 `_processLock`/`IsCompiling` 추가, 이중 컴파일 방지 (`dd622ca`)
+- ✅ **StopCompile 연결**: Presenter → `compiler.StopCompile()` 실제 동작 연결 (`9c05a85`)
+- ✅ **FormClosing Cancel**: 미저장 상태에서 창 닫기 시 취소 가능하도록 `FormClosingEventArgs` 전달 (`9c05a85`)
+- ✅ **테마 메뉴 통합**: `SwitchTheme()`에 `SaveThemePreference()` 통합, 중복 이벤트 핸들러 정리 (`9c05a85`)
+- ✅ **고DPI 지원**: `app.manifest` Per-Monitor V2 선언 추가 (`c2b138a`)
+- ✅ **전역 예외 핸들러**: `Program.cs` `Application.ThreadException` / `AppDomain.UnhandledException` 등록 (`c2b138a`)
+- ✅ **Regex 최적화**: `CompilerError.Parse()`의 Regex를 `static readonly Compiled`로 사전 빌드 (`c2b138a`)
+- ✅ **`smart` 압축 모드**: IDE 툴바 ComboBox에 `smart` 항목 추가 (`c2b138a`)
+- ✅ **예외 로깅**: 빈 `catch { }` 블록에 `Debug.WriteLine` 로깅 추가 (`c2b138a`)
+- ✅ **Presenter 정리**: View가 직접 처리하는 빈 핸들러(Undo/Redo/Cut/Copy/Paste) 구독 제거 (`f273543`)
+- ✅ **잔여 파일 삭제**: 사용하지 않는 `Form1.cs`, `Form1.Designer.cs` 제거 (`f273543`)
+- ✅ **Pascal 주석 통일**: `Compression.SmartSelector.pas` 중국어 주석 → 영어 통일 (`3a605293`)
+
+---
+
 ## 📊 전체 진행률: **100%**
 
 ```
@@ -32,6 +52,7 @@
 ✅ Phase 3: Smart Selector (100%)
 ✅ Phase 4: Compiler Integration (100%)
 ✅ Phase 5: IDE Improvements & Portability (100%)
+✅ Phase 6: Code Review & Stability (100%)
 ```
 
 ---
@@ -41,10 +62,10 @@
 ### **안정성 유지**
 - 사용자의 피드백에 따른 마이너 버그 수정
 - 공식 배포본을 위한 서명(Code Signing) 절차 검토
+- `MainForm.cs` 대규모 리팩토링 (1300줄 → ThemeManager 분리, ~600줄 목표)
 
 ---
 
 **최종 보고 작성**: Antigravity AI  
-**날짜**: 2026-01-25 17:58 KST  
-**상태**: 프로젝트 전면 성공 및 안정화 완료
-
+**날짜**: 2026-02-19 18:11 KST  
+**상태**: 코드 리뷰 완료 — 전면 안정화 및 품질 강화 확인
