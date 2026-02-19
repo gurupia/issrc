@@ -18,9 +18,9 @@ uses
 type
   { File categories for compression strategy selection }
   TFileCategory = (
-    fcTextWeb,      // HTML, CSS, JS, JSON, XML, SVG → Brotli优先
-    fcTextDoc,      // TXT, MD, LOG, CSV, INI, CFG → Brotli优先
-    fcBinary,       // EXE, DLL, SYS, OCX → Zstd优先
+    fcTextWeb,      // HTML, CSS, JS, JSON, XML, SVG -> Brotli preferred
+    fcTextDoc,      // TXT, MD, LOG, CSV, INI, CFG -> Brotli preferred
+    fcBinary,       // EXE, DLL, SYS, OCX -> Zstd preferred
     fcArchive,      // ZIP, 7Z, RAR, GZ → Stored (already compressed)
     fcImageComp,    // JPG, PNG, GIF, WEBP → Stored (already compressed)
     fcImageRaw,     // BMP, TIFF, ICO → Zstd
@@ -32,8 +32,8 @@ type
   { Compression strategies }
   TCompressionStrategy = (
     csStored,       // No compression
-    csBrotli,       // Brotli compression (text优先)
-    csZstd,         // Zstandard compression (binary优先)
+    csBrotli,       // Brotli compression (text preferred)
+    csZstd,         // Zstandard compression (binary preferred)
     csLZMA2         // LZMA2 (legacy/compatibility)
   );
 
@@ -77,9 +77,10 @@ const
   );
 
   { Document extensions }
-  DocExtensions: array[0..9] of String = (
+  DocExtensions: array[0..14] of String = (
     '.txt', '.md', '.log', '.csv', '.ini', '.cfg',
-    '.conf', '.yaml', '.yml', '.toml'
+    '.conf', '.yaml', '.yml', '.toml', '.pas', '.dfm',
+    '.iss', '.isl', '.inc'
   );
 
   { Binary executable extensions }
